@@ -1,0 +1,16 @@
+services:
+  api:
+    container_name: video_grabber_api
+    build: ./backend
+    ports:
+      - 8000:8000
+    env_file: "./backend/.env"
+    develop:
+      watch:
+        - path: ./backend/requirements.txt
+          action: rebuild
+        - path: ./backend
+          target: /app
+          action: sync
+    volumes:
+      - ./backend/logs:/app/logs
