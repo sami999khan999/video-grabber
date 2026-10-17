@@ -53,6 +53,13 @@ const state = {
   offline: false,
   // Last link tuned in, so it can be looked up again once the server is back
   lastUrl: "",
+  tabId: null,
+  tabTitle: "",
+  // What the background script saw this tab play
+  detected: [],
+  // Headers and login that go with the current source (for a detected stream)
+  sourceExtra: {},
+  allSites: false,
 };
 
 // --- start-up ------------------------------------------------------------------
@@ -88,8 +95,22 @@ async function init() {
 
   const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
   state.tabUrl = tab?.url || "";
+  state.tabId = tab?.id ?? null;
+  state.tabTitle = tab?.title || "";
+  state.allSites = await VG.hasAllSites();
+  if (state.tabId != null) {
+    state.detected = await VG.detectedMedia(state.tabId);
+    renderDetected();
+    // Keep the list current while the popup is open
+    chrome.storage.onChanged.addListener((changes, area) => {
+      const change = changes[VG.mediaKey(state.tabId)];
+      if (area !== "session" || !change) return;
+      state.detected = change.newValue || [];
+      renderDetected();
+    });
+  }
   const isWebPage = /^https?:\/\//.test(state.tabUrl) && !state.tabUrl.startsWith(state.server);
-  if (isWebPage) tune(state.tabUrl);
+  if (isWebPage) tune(state.tabUrl, { pageTune: true });
   else renderSource({ placeholder: "Open a video or playlist page, or paste a link below." });
 }
 
@@ -157,14 +178,24 @@ function openStation() {
 
 // --- tune in --------------------------------------------------------------------
 
-async function tune(url) {
+/**
+ * Look a link up on the server. `media` is a stream this tab was seen playing: it carries the
+ * page's headers, and its title (yt-dlp only sees a file name there).
+ */
+async function tune(url, { media = null, pageTune = false } = {}) {
   state.lastUrl = url;
   if (state.offline) return;
   state.source = null;
   updateGrab();
   renderSource({ loading: url });
   try {
-    const source = await VG.api("/info/", { method: "POST", body: { url } });
+    const cookies = await VG.cookieTextFor(media ? [media.pageUrl, media.url] : [url]);
+    state.sourceExtra = { ...(media ? { headers: media.headers } : {}), ...(cookies ? { cookies } : {}) };
+    const source = await VG.api("/info/", { method: "POST", body: { url, ...state.sourceExtra } });
+    if (media && source.kind === "video") {
+      source.title = media.title || source.title;
+      source.webpage_url = media.url;
+    }
     state.source = source;
     if (source.kind === "video") {
       state.selectedFormats = new Set(source.formats.length ? [source.formats[0].format_id] : []);
@@ -174,12 +205,80 @@ async function tune(url) {
     renderSource({ source });
   } catch (err) {
     if (err.offline) setOffline(true);
-    else renderSource({ error: err.message });
+    else if (pageTune && state.detected.length)
+      // Not a dead end: the video this page plays is right below
+      renderSource({ placeholder: "This site isn't supported directly, but the video it plays is below. Grab it from there." });
+    else
+      renderSource({
+        error: err.message,
+        hint: pageTune ? detectHint() : null,
+        settings: pageTune && !state.allSites && !state.detected.length,
+      });
   }
   updateGrab();
 }
 
-function renderSource({ loading, error, hint, placeholder, source }) {
+/** What to try when the page itself isn't supported. */
+function detectHint() {
+  if (state.detected.length) return "This page's own link didn't work, but the video it plays is listed below. Grab it from there.";
+  if (!state.allSites) return "Turn on \"Detect videos on any site\" in Settings, play the video for a moment, then open this popup again.";
+  return "Play the video for a few seconds, then open this popup again: the stream it plays will show up here.";
+}
+
+const KIND = { hls: "HLS stream", dash: "DASH stream", file: "Video file" };
+
+function renderDetected() {
+  const box = $("detected");
+  box.hidden = state.detected.length === 0;
+  if (box.hidden) return;
+  box.replaceChildren(
+    h("div", { class: "section-head" }, h("span", { class: "sticker lime" }, "Playing on this page"), h("span", { class: "meta" }, `${state.detected.length} found`)),
+    h(
+      "ul",
+      { class: "media-list" },
+      state.detected.map((m) => {
+        const where = (() => {
+          try {
+            const u = new URL(m.url);
+            return `${u.hostname}${u.pathname}`;
+          } catch {
+            return m.url;
+          }
+        })();
+        return h(
+          "li",
+          { class: "media" },
+          h(
+            "div",
+            { class: "media-info" },
+            h("b", {}, `${KIND[m.kind]}${m.ext && m.kind === "file" ? ` · ${m.ext.toUpperCase()}` : ""}${m.size ? ` · ${VG.formatBytes(m.size)}` : ""}`),
+            h("small", { title: m.url }, where),
+          ),
+          m.kind !== "file" && h("button", { class: "btn ghost", title: "List the qualities in this stream", onclick: () => tune(m.url, { media: m }) }, "Qualities"),
+          h("button", { class: "btn small yellow", onclick: (e) => grabMedia(m, e.currentTarget) }, "Grab"),
+        );
+      }),
+    ),
+  );
+}
+
+async function grabMedia(media, button) {
+  button.disabled = true;
+  try {
+    const cookies = await VG.cookieTextFor([media.pageUrl, media.url]);
+    const item = { url: media.url, format_id: "best", label: KIND[media.kind], title: media.title || state.tabTitle, headers: media.headers };
+    if (cookies) item.cookies = cookies;
+    const { jobs } = await VG.api("/jobs/", { method: "POST", body: { items: [item] } });
+    await chrome.runtime.sendMessage({ type: "track", ids: jobs.map((j) => j.id) });
+    button.textContent = "Queued!";
+  } catch (err) {
+    if (err.offline) setOffline(true);
+    else renderSource({ error: err.message });
+    button.disabled = false;
+  }
+}
+
+function renderSource({ loading, error, hint, settings, placeholder, source }) {
   const box = $("source");
   box.replaceChildren();
 
@@ -198,6 +297,7 @@ function renderSource({ loading, error, hint, placeholder, source }) {
         h("div", { class: "error" }, error),
         cookies && h("p", { class: "meta" }, "Upload YouTube cookies in the station (Cookies tab), then try again."),
         hint && h("p", { class: "meta" }, hint),
+        settings && h("button", { class: "btn small yellow", onclick: () => chrome.runtime.openOptionsPage() }, "Open Settings"),
       ].filter(Boolean),
     );
     return;
@@ -323,6 +423,7 @@ function pendingItems() {
         label: f.format_id === "best" ? "best" : `${f.quality} ${f.ext}`,
         title: source.title,
         thumbnail: source.thumbnail,
+        ...state.sourceExtra,
       }));
   }
   const label = VG.PRESETS.find((p) => p.id === state.preset)?.label ?? state.preset;

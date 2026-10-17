@@ -77,6 +77,7 @@ docker compose up -d
 | 📡 **Live progress** | Server-Sent Events push percent, size, speed, ETA, which stream (video, then audio) and the merge / convert step |
 | 🔀 **Parallel downloads** | A worker pool runs several at once (3 by default); the rest wait on standby. Cancel, retry or remove any of them |
 | 💾 **Straight to disk** | Finished files go to the browser's own download manager (auto-save is optional); nothing is held in browser memory |
+| 🌐 **Almost any site** | ~1,800 sites by name through yt-dlp; with the extension, also the video a page is playing on any other site (MP4, HLS, DASH), fetched with that page's headers and, if you allow it, your login for that site |
 | 🍪 **YouTube-proof** | Upload a `cookies.txt` from the page when YouTube says *"confirm you're not a bot"*; cookies are only used when the site insists, so they never cost you quality |
 | 📱 **Works on phones** | The whole station folds down to a single column |
 
@@ -112,6 +113,10 @@ your server: its popup lists every quality for the current tab, queues downloads
 progress live. A right-click menu, a badge counting active downloads, notifications and auto-save
 to your Downloads folder come with it.
 
+On sites the server doesn't know, turn on **Detect videos on any site** in the extension's
+settings: while a page plays, the popup lists the file or stream it loads under **Playing on this
+page**, ready to grab. DRM-protected services (Netflix, Spotify…) stay out of reach by design.
+
 <table>
   <tr>
     <td align="center" width="33%"><img src="docs/screenshots/extension-video.png" alt="Popup on a video: every quality from 4K down, plus audio" width="260"></td>
@@ -124,12 +129,14 @@ to your Downloads folder come with it.
     <td align="center"><b>Live progress</b><br><sub>2 per site, the rest on standby</sub></td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/screenshots/extension-anysite.png" alt="Popup on an unsupported site: the video the page plays, ready to grab" width="260"></td>
     <td align="center"><img src="docs/screenshots/extension-offline.png" alt="Popup when the server is off: how to start it, reconnects by itself" width="260"></td>
-    <td align="center" colspan="2"><img src="docs/screenshots/extension-settings.png" alt="Extension settings: server address with quick picks for common ports" width="520"></td>
+    <td align="center"><img src="docs/screenshots/extension-settings.png" alt="Extension settings: server address with quick picks for common ports" width="260"></td>
   </tr>
   <tr>
+    <td align="center"><b>Any site</b><br><sub>grabs what the page is playing</sub></td>
     <td align="center"><b>Server off</b><br><sub>start command, reconnects by itself</sub></td>
-    <td align="center" colspan="2"><b>Settings</b><br><sub>server address, quick picks for common ports</sub></td>
+    <td align="center"><b>Settings</b><br><sub>port quick picks, any-site switches</sub></td>
   </tr>
 </table>
 
@@ -218,7 +225,7 @@ Base URL `/api`, JSON bodies.
 | `GET` | `/status/` | | `{ max_parallel, cookies }` |
 | `POST` | `/info/` | `{ url }` | Video formats, or playlist entries (`kind` says which) |
 | `GET` | `/jobs/` | | All jobs |
-| `POST` | `/jobs/` | `{ items: [{ url, format_id, label?, title?, thumbnail?, group? }] }` | Queues one job per item |
+| `POST` | `/jobs/` | `{ items: [{ url, format_id, label?, title?, thumbnail?, group?, headers?, cookies? }] }` | Queues one job per item |
 | `GET` | `/jobs/stream/` | | Server-Sent Events: `{ jobs: [...] }` on every change |
 | `POST` | `/jobs/:id/cancel/` | | Stops a job, keeps it listed |
 | `POST` | `/jobs/:id/retry/` | | Replaces a failed or cancelled job |
@@ -226,6 +233,10 @@ Base URL `/api`, JSON bodies.
 | `POST` | `/jobs/clear/` | | Removes finished, failed and cancelled jobs |
 | `GET` | `/jobs/:id/file/` | | The finished file |
 | `POST` / `DELETE` | `/cookies/` | multipart `file` | Stores / forgets an uploaded `cookies.txt` |
+
+`headers` (only `Referer`, `Origin`, `User-Agent`) and `cookies` (the text of a cookies.txt) are
+optional and also accepted by `/info/`; the extension uses them for videos found on a page. The
+cookies are used for that one request or job and never stored, listed or logged.
 
 `format_id`: `best`, an exact height from `/info/` (`h2160`, `h1080`…), a cap for playlists
 (`1080p`), `audio` (M4A), `audio-opus`, `audio-mp3`, or any raw yt-dlp format selector.

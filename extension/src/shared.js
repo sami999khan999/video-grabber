@@ -7,6 +7,41 @@ var VG = (() => {
     server: "http://localhost:7845",
     autoSave: true,
     notify: true,
+    // Pass the user's login for the video's site along with a download (off unless they opt in)
+    sendCookies: false,
+  };
+
+  // Seeing videos on any site needs the browser's OK for all sites (asked from Settings)
+  const ALL_SITES = { origins: ["http://*/*", "https://*/*"] };
+  const hasAllSites = () => chrome.permissions.contains(ALL_SITES);
+  const requestAllSites = () => chrome.permissions.request(ALL_SITES);
+
+  // Videos the background script saw a tab load, newest first
+  const mediaKey = (tabId) => `media:${tabId}`;
+  const detectedMedia = async (tabId) => (await chrome.storage.session.get(mediaKey(tabId)))[mediaKey(tabId)] || [];
+
+  /**
+   * The browser's cookies for these addresses as a Netscape cookies.txt, for one download.
+   * Null when the user hasn't opted in, or there are none.
+   */
+  const cookieTextFor = async (urls) => {
+    if (!(await getSettings()).sendCookies) return null;
+    const found = new Map();
+    for (const url of new Set(urls.filter((u) => /^https?:/.test(u)))) {
+      let cookies = [];
+      try {
+        cookies = await chrome.cookies.getAll({ url });
+      } catch {
+        continue; // no permission for that site
+      }
+      for (const c of cookies) found.set(`${c.domain}|${c.path}|${c.name}`, c);
+    }
+    if (!found.size) return null;
+    const lines = [...found.values()].map((c) => {
+      const domain = c.hostOnly ? c.domain.replace(/^\./, "") : c.domain.startsWith(".") ? c.domain : `.${c.domain}`;
+      return [domain, c.hostOnly ? "FALSE" : "TRUE", c.path, c.secure ? "TRUE" : "FALSE", Math.floor(c.expirationDate || 0), c.name, c.value].join("\t");
+    });
+    return ["# Netscape HTTP Cookie File", ...lines, ""].join("\n");
   };
 
   const getSettings = async () => ({ ...DEFAULTS, ...(await chrome.storage.local.get(Object.keys(DEFAULTS))) });
@@ -98,6 +133,7 @@ var VG = (() => {
   };
 
   return {
+    ALL_SITES, hasAllSites, requestAllSites, mediaKey, detectedMedia, cookieTextFor,
     runCommand,
     DEFAULTS, getSettings, normalizeServer, hasAccess, requestAccess, api,
     isActive, byPriority, formatBytes, formatDuration, PRESETS,

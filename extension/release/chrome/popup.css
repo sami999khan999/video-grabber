@@ -357,6 +357,53 @@ main {
   to { transform: rotate(360deg); }
 }
 
+/* --- playing on this page ------------------------------------------------------ */
+
+#detected .section-head {
+  margin-bottom: 6px;
+}
+
+.media-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.media {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 6px;
+  padding: 6px 8px;
+  border-radius: 12px;
+  background: #1d232b;
+  border: 2px solid var(--ink);
+}
+
+.media-info {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+}
+
+.media-info b {
+  font-size: 12px;
+}
+
+.media-info small {
+  overflow: hidden;
+  color: var(--muted);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.media .btn.small {
+  height: 30px;
+  padding: 0 12px;
+}
+
 /* --- server off ------------------------------------------------------------- */
 
 .offline {

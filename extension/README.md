@@ -23,6 +23,8 @@ progress live. Works in Chrome, Edge, Brave, Opera and Firefox.
 - **Badge and notifications**: the toolbar shows how many downloads are running; you get a
   notification when one is ready or fails.
 - **Auto-save**: downloads you start from the extension go straight to your Downloads folder.
+- **Any site** (opt-in): the video file or stream (MP4, HLS, DASH) a page plays shows up under
+  *Playing on this page*, even on sites the server doesn't know.
 
 The video is downloaded by the server (yt-dlp, FFmpeg), not by the browser, so YouTube's split
 streams and signed URLs are handled the same way as in the web app.
@@ -62,6 +64,24 @@ Right-click the toolbar button → **Options** (or the gear in the popup):
 | Server address | `http://localhost:7845` | Quick picks for 7845, 8080, 8000 and 8888; any address works, e.g. `http://192.168.1.20:7845` (the browser asks once for permission) |
 | Save files when done | on | Sends finished downloads to your Downloads folder |
 | Notifications | on | Queued / ready / failed |
+| Detect videos on any site | off | See [Any website](#any-website) |
+| Send my login with downloads | off | See [Any website](#any-website) |
+
+## Any website
+
+The server recognises about 1,800 sites by name. For everything else, Settings has two switches,
+both off until you turn them on:
+
+| Switch | What it does |
+|---|---|
+| **Detect videos playing on any site** | Lets the extension see the video files and streams a page loads (it asks the browser for access to all sites). Play the video for a moment, open the popup, and grab it from *Playing on this page*; streams also have **Qualities**. Pieces of streams, tiny clips (previews, ads) and YouTube's own servers are left out. Nothing leaves the browser until you press Grab |
+| **Send my login for that site with each download** | For videos that only play while you're logged in. Your cookies for that one site go to your server with the download, are used for it and deleted straight after; never stored, listed or logged. Only use it with a server you run yourself |
+
+The page's address goes along as `Referer`, because many sites refuse video requests that don't
+come from their own page. DRM-protected services (Netflix, Prime Video, Disney+, Spotify) can't be
+downloaded: their video is encrypted, and breaking that is illegal in most countries.
+
+<p><img src="../docs/screenshots/extension-anysite.png" alt="Popup on an unsupported site, offering the video the page plays" width="250"></p>
 
 ## Notes
 

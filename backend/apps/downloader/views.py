@@ -11,7 +11,24 @@ from django.views.decorators.http import require_GET
 from .jobs import FINISHED, MAX_PARALLEL_DOWNLOADS, clean_error, get_manager
 from .politeness import PER_SITE_PARALLEL, POLITE_MODE
 from .services import extract_video_info
-from .ytdlp import cookies_source, delete_uploaded_cookies, save_uploaded_cookies
+from .ytdlp import (
+    clean_headers,
+    cookies_source,
+    delete_uploaded_cookies,
+    parse_cookie_text,
+    save_uploaded_cookies,
+)
+
+
+def request_cookies(data):
+    """A login sent with one request (Netscape cookies.txt text), checked; None when absent."""
+    raw = data.get("cookies")
+    if not raw:
+        return None
+    if not isinstance(raw, str):
+        raise ValueError("cookies must be the text of a cookies.txt file.")
+    text, _ = parse_cookie_text(raw.encode("utf-8"))
+    return text
 
 
 class StatusView(APIView):
@@ -69,7 +86,10 @@ class VideoInfoView(APIView):
             )
 
         try:
-            info = extract_video_info(url)
+            # The browser extension may pass the page's headers and (if the user allows it)
+            # their login for that site
+            cookie_text = request_cookies(request.data)
+            info = extract_video_info(url, headers=clean_headers(request.data.get("headers")), cookie_text=cookie_text)
             return Response(info, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
@@ -102,6 +122,10 @@ class JobListView(APIView):
                     {"error": "Every item needs a url."},
                     status=status.HTTP_400_BAD_REQUEST,
                 )
+            try:
+                item["cookies"] = request_cookies(item)
+            except ValueError as e:
+                return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
 
         jobs = get_manager().create(items)
         return Response(

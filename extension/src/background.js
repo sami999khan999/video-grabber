@@ -11,14 +11,18 @@ const MENU = [
 ];
 const POLL_ALARM = "poll-jobs";
 
-// track() and handleJobs() both read, change and write the pending list; live updates arrive
-// several times a second, so they take turns or a newly queued job can be written away
-let turn = Promise.resolve();
-const serial = (fn) => (...args) => {
-  const result = turn.then(() => fn(...args));
-  turn = result.catch(() => {});
-  return result;
+// Functions that read, change and write the same stored list take turns, or an update that
+// arrives in between gets written away (live job updates and media requests come in bursts)
+const makeSerial = () => {
+  let turn = Promise.resolve();
+  return (fn) => (...args) => {
+    const result = turn.then(() => fn(...args));
+    turn = result.catch(() => {});
+    return result;
+  };
 };
+const serial = makeSerial();
+const serialMedia = makeSerial();
 
 chrome.runtime.onInstalled.addListener(() => {
   chrome.contextMenus.removeAll(() => {
@@ -42,11 +46,29 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || src || info.pageUrl;
   const label = MENU.find((m) => m.id === formatId)?.title ?? formatId;
   try {
-    // Playlist links queue every video in them
-    const source = await VG.api("/info/", { method: "POST", body: { url } });
-    const items = source.kind === "playlist"
-      ? source.entries.map((e) => ({ url: e.url, format_id: formatId, label, title: e.title, thumbnail: e.thumbnail, group: source.title }))
-      : [{ url: source.webpage_url, format_id: formatId, label, title: source.title, thumbnail: source.thumbnail }];
+    const cookies = await VG.cookieTextFor([url]);
+    let items;
+    let source;
+    try {
+      // Playlist links queue every video in them
+      source = await VG.api("/info/", { method: "POST", body: { url, cookies } });
+      items = source.kind === "playlist"
+        ? source.entries.map((e) => ({ url: e.url, format_id: formatId, label, title: e.title, thumbnail: e.thumbnail, group: source.title }))
+        : [{ url: source.webpage_url, format_id: formatId, label, title: source.title, thumbnail: source.thumbnail, cookies }];
+    } catch (err) {
+      // A site the server can't read: fall back to the video this tab was seen playing
+      const [media] = err.offline || !tab ? [] : await VG.detectedMedia(tab.id);
+      if (!media) throw err;
+      source = { title: tab.title };
+      items = [{
+        url: media.url,
+        format_id: formatId,
+        label,
+        title: tab.title,
+        headers: media.headers,
+        cookies: await VG.cookieTextFor([media.pageUrl, media.url]),
+      }];
+    }
     const { jobs } = await VG.api("/jobs/", { method: "POST", body: { items } });
     await track(jobs.map((j) => j.id));
     notify(
@@ -133,3 +155,96 @@ async function notify(id, title, message) {
     message: message.slice(0, 300),
   });
 }
+
+// --- videos playing on pages ---------------------------------------------------------
+// The browser fetches the real file or stream a page plays. Remembering those per tab lets the
+// popup offer them on sites the server can't read by itself. Only sites the user allowed are
+// visible here (localhost always; every site once "Detect videos" is on in Settings).
+
+const MANIFEST = /\.(m3u8|mpd)(?:$|[?#])/i;
+const MEDIA_FILE = /\.(mp4|webm|m4v|mov|mkv|ogv|flv|mp3|m4a|ogg|opus|wav)(?:$|[?#])/i;
+const MANIFEST_TYPE = /mpegurl|dash\+xml/i;
+const MEDIA_TYPE = /^(video|audio)\//i;
+// Pieces of a stream, not the stream itself
+const SEGMENT = /\.(ts|m4s|aac|vtt)(?:$|[?#])|[?&](range|bytes)=\d|init\.mp4/i;
+// YouTube's own servers (YouTube links work directly) and common ad hosts
+const SKIP_HOST = /(^|\.)(googlevideo\.com|ytimg\.com|doubleclick\.net|googlesyndication\.com|imasdk\.googleapis\.com)$/i;
+const MIN_FILE_BYTES = 512 * 1024; // smaller files are previews, sounds or ad snippets
+const MAX_PER_TAB = 15;
+
+const header = (headers, name) => headers?.find((h) => h.name.toLowerCase() === name)?.value || "";
+
+chrome.webRequest.onHeadersReceived.addListener(
+  (details) => {
+    if (details.tabId < 0 || details.statusCode >= 400) return;
+    let url;
+    try {
+      url = new URL(details.url);
+    } catch {
+      return;
+    }
+    if (!/^https?:$/.test(url.protocol) || SKIP_HOST.test(url.hostname)) return;
+
+    const type = header(details.responseHeaders, "content-type");
+    const manifest = MANIFEST.test(url.pathname) || MANIFEST_TYPE.test(type);
+    const file = !manifest && (MEDIA_FILE.test(url.pathname) || MEDIA_TYPE.test(type));
+    if (!manifest && !file) return;
+    if (!manifest && (SEGMENT.test(details.url) || /mp2t/i.test(type))) return;
+
+    // A partial (206) answer gives the full size after the slash in Content-Range
+    const range = header(details.responseHeaders, "content-range").match(/\/(\d+)$/);
+    const size = Number(range?.[1] || header(details.responseHeaders, "content-length")) || null;
+    if (file && size && size < MIN_FILE_BYTES) return;
+
+    recordMedia(details, { manifest, type, size });
+  },
+  { urls: ["<all_urls>"], types: ["media", "xmlhttprequest", "other"] },
+  ["responseHeaders"],
+);
+
+const recordMedia = serialMedia(async (details, { manifest, type, size }) => {
+  const { server } = await VG.getSettings();
+  if (details.url.startsWith(server)) return;
+
+  let tab;
+  try {
+    tab = await chrome.tabs.get(details.tabId);
+  } catch {
+    return;
+  }
+  // The page that asked for it: Firefox says so; in Chrome a sub-frame only gives its origin
+  const pageUrl = details.documentUrl || (details.frameId === 0 ? tab.url : null) || (details.initiator ? `${details.initiator}/` : tab.url);
+  const origin = (() => {
+    try {
+      return new URL(pageUrl).origin;
+    } catch {
+      return null;
+    }
+  })();
+
+  const kind = manifest ? (/mpd|dash/i.test(details.url + type) ? "dash" : "hls") : "file";
+  const entry = {
+    url: details.url,
+    kind,
+    ext: (details.url.match(/\.([a-z0-9]{2,5})(?:$|[?#])/i)?.[1] || "").toLowerCase(),
+    size,
+    pageUrl,
+    title: tab.title || "",
+    headers: { Referer: pageUrl, ...(origin ? { Origin: origin } : {}), "User-Agent": navigator.userAgent },
+    seenAt: Date.now(),
+  };
+
+  const key = VG.mediaKey(details.tabId);
+  const list = (await chrome.storage.session.get(key))[key] || [];
+  // Same file with fresh tokens in the query counts once
+  const id = details.url.split("?")[0];
+  const rest = list.filter((m) => m.url.split("?")[0] !== id);
+  await chrome.storage.session.set({ [key]: [entry, ...rest].slice(0, MAX_PER_TAB) });
+});
+
+const forgetTab = serialMedia((tabId) => chrome.storage.session.remove(VG.mediaKey(tabId)));
+chrome.tabs.onRemoved.addListener((tabId) => forgetTab(tabId));
+chrome.tabs.onUpdated.addListener((tabId, change) => {
+  // A new page in the tab: what the old one played no longer applies
+  if (change.url) forgetTab(tabId);
+});

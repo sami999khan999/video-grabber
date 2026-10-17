@@ -12,7 +12,7 @@ from yt_dlp.utils import DownloadCancelled
 from common.utils.log import log
 
 from .politeness import gate, polite_options, retry_pause
-from .ytdlp import extract
+from .ytdlp import clean_headers, extract
 
 # Jobs live in memory, so the app must run as a single process (threads are fine)
 MAX_PARALLEL_DOWNLOADS = int(os.environ.get("MAX_PARALLEL_DOWNLOADS", "3"))
@@ -97,9 +97,13 @@ def clean_error(exc: Exception) -> str:
 
 
 class Job:
-    def __init__(self, url, format_id, label=None, title=None, thumbnail=None, group=None):
+    def __init__(self, url, format_id, label=None, title=None, thumbnail=None, group=None,
+                 headers=None, cookie_text=None):
         self.id = uuid.uuid4().hex[:12]
         self.url = url
+        # Sent by the browser extension for this download only; never listed or logged
+        self.headers = headers or {}
+        self.cookie_text = cookie_text
         self.format_id = format_id or "best"
         self.label = label or self.format_id
         self.title = title or ""
@@ -208,6 +212,8 @@ class JobManager:
                 title=item.get("title"),
                 thumbnail=item.get("thumbnail"),
                 group=item.get("group"),
+                headers=clean_headers(item.get("headers")),
+                cookie_text=item.get("cookies") or None,
             )
             with self._cond:
                 self._jobs[job.id] = job
@@ -251,6 +257,8 @@ class JobManager:
             "title": job.title,
             "thumbnail": job.thumbnail,
             "group": job.group,
+            "headers": job.headers,
+            "cookies": job.cookie_text,
         }])[0]
 
     def clear_finished(self):
@@ -290,7 +298,8 @@ class JobManager:
                 # the same video run at once); a second try, after a pause, usually gets through
                 for attempt in (1, 2):
                     try:
-                        info = extract(job.url, download=True, **opts)
+                        info = extract(job.url, download=True, headers=job.headers,
+                                       cookie_text=job.cookie_text, **opts)
                         break
                     except DownloadCancelled:
                         raise
@@ -341,6 +350,8 @@ class JobManager:
                 eta=None,
                 notice=notice,
                 finished_at=time.time(),
+                # The login was only needed to fetch the file
+                cookie_text=None,
             )
             log("info", f"Job {job.id}: done", payload={"file": filepath})
         except Exception as exc:

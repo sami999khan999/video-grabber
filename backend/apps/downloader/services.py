@@ -16,17 +16,20 @@ _info_cache = {}
 _info_lock = threading.Lock()
 
 
-def extract_video_info(url: str) -> dict:
+def extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
     """
     Extract video metadata (title, thumbnail, duration, available formats)
     without downloading the video. Playlist links return the list of entries.
     """
+    if cookie_text:
+        # Someone's login was used: the answer is theirs, so it isn't cached
+        return _extract_video_info(url, headers, cookie_text)
     now = time.time()
     with _info_lock:
         cached = _info_cache.get(url)
         if cached and now - cached[0] < INFO_CACHE_SECONDS:
             return cached[1]
-    result = _extract_video_info(url)
+    result = _extract_video_info(url, headers)
     with _info_lock:
         # Keep the cache small: drop expired entries, then the oldest
         for key in [k for k, (t, _) in _info_cache.items() if now - t >= INFO_CACHE_SECONDS]:
@@ -37,10 +40,12 @@ def extract_video_info(url: str) -> dict:
     return result
 
 
-def _extract_video_info(url: str) -> dict:
+def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
     log("info", f"Extracting info for URL: {url}")
     info = extract(
         url,
+        headers=headers,
+        cookie_text=cookie_text,
         skip_download=True,
         # A watch link that also carries a playlist id means the single video
         noplaylist=True,

@@ -49,8 +49,8 @@ def cookiefile():
         return _copy["path"]
 
 
-def save_uploaded_cookies(content: bytes):
-    """Check that it looks like a Netscape cookies.txt and store it."""
+def parse_cookie_text(content: bytes):
+    """Check that it looks like a Netscape cookies.txt; returns (text, cookie count)."""
     if len(content) > MAX_COOKIES_BYTES:
         raise ValueError("That file is too big for a cookies.txt.")
     try:
@@ -67,13 +67,19 @@ def save_uploaded_cookies(content: bytes):
             "No cookies found. Export them in Netscape format (the cookies.txt that "
             "browser extensions like \"Get cookies.txt LOCALLY\" produce)."
         )
+    return text, len(cookie_lines)
+
+
+def save_uploaded_cookies(content: bytes):
+    """Check that it looks like a Netscape cookies.txt and store it."""
+    text, count = parse_cookie_text(content)
     os.makedirs(DATA_DIR, exist_ok=True)
     tmp = UPLOADED_COOKIES + ".tmp"
     with open(tmp, "w", encoding="utf-8") as f:
         f.write(text if text.endswith("\n") else text + "\n")
     os.chmod(tmp, 0o600)
     os.replace(tmp, UPLOADED_COOKIES)
-    return len(cookie_lines)
+    return count
 
 
 def delete_uploaded_cookies():
@@ -104,12 +110,48 @@ def _options(with_cookies: bool, extra: dict) -> dict:
     return opts
 
 
-def extract(url: str, download: bool = False, **extra) -> dict:
+# Headers the browser extension may pass on: many sites only serve a video to requests that
+# look like they come from the page playing it
+ALLOWED_HEADERS = {"referer": "Referer", "origin": "Origin", "user-agent": "User-Agent"}
+
+
+def clean_headers(raw) -> dict:
+    """Keep only the allowed headers, as single-line strings of sane length."""
+    if not isinstance(raw, dict):
+        return {}
+    headers = {}
+    for key, value in raw.items():
+        name = ALLOWED_HEADERS.get(str(key).lower())
+        if name and isinstance(value, str) and value and len(value) <= 2000 and not any(c in value for c in "\r\n"):
+            headers[name] = value
+    return headers
+
+
+def extract(url: str, download: bool = False, headers=None, cookie_text=None, **extra) -> dict:
     """
     Run yt-dlp on a link. Always anonymous first, because cookies can cut a YouTube account down
     to fewer, lower-quality streams (and the bot check comes and goes); if the site insists on a
     signed-in user and cookies are available, retry with them.
+
+    `headers` (Referer, ...) go with every request. `cookie_text` is a login the browser
+    extension sent for this one request: it is used straight away, written to a private
+    temporary file only for the duration of the call, and never stored.
     """
+    if headers:
+        extra["http_headers"] = headers
+    if cookie_text:
+        fd, path = tempfile.mkstemp(prefix="request-cookies-", suffix=".txt")
+        try:
+            with os.fdopen(fd, "w", encoding="utf-8") as f:
+                f.write(cookie_text)
+            with yt_dlp.YoutubeDL({**_options(False, extra), "cookiefile": path}) as ydl:
+                return ydl.extract_info(url, download=download)
+        finally:
+            try:
+                os.remove(path)
+            except FileNotFoundError:
+                pass
+
     attempts = [False, True] if cookiefile() is not None else [False]
 
     last_error = None

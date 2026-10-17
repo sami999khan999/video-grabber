@@ -69,4 +69,41 @@ $("form").addEventListener("submit", async (e) => {
   }
 });
 
+// --- any website -------------------------------------------------------------------
+
+const showAny = (ok, text) => {
+  const box = document.createElement("div");
+  box.className = ok ? "ok" : "error";
+  box.textContent = text;
+  $("any-result").replaceChildren(box);
+};
+
+$("detect").addEventListener("change", async (e) => {
+  if (e.target.checked) {
+    // Has to happen right in the click, or the browser won't ask
+    const granted = await VG.requestAllSites();
+    e.target.checked = granted;
+    showAny(granted, granted
+      ? "On. Play a video, then open the popup: what the page plays shows up under \"Playing on this page\"."
+      : "The browser wasn't allowed to see other sites, so detection stays off.");
+  } else {
+    await chrome.permissions.remove(VG.ALL_SITES);
+    showAny(true, "Off. The extension no longer sees what other sites load.");
+  }
+});
+
+$("sendCookies").addEventListener("change", async (e) => {
+  await chrome.storage.local.set({ sendCookies: e.target.checked });
+  const reach = await VG.hasAllSites();
+  showAny(true, e.target.checked
+    ? `On. Your login for a video's site goes with that download only.${reach ? "" : " Turn on detection too, so the extension can read logins for sites other than localhost."}`
+    : "Off. Downloads go without your logins.");
+});
+
+async function loadAny() {
+  $("detect").checked = await VG.hasAllSites();
+  $("sendCookies").checked = (await VG.getSettings()).sendCookies;
+}
+
 load();
+loadAny();
