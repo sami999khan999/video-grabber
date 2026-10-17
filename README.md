@@ -1,162 +1,251 @@
 <div align="center">
 
-# Video Grabber
+# 📺 Video Grabber
 
-**Paste a video link, pick a format, download it: a Django REST API around yt-dlp with a Next.js frontend.**
+### A wall of TVs for [yt-dlp](https://github.com/yt-dlp/yt-dlp)
 
-![Next.js](https://img.shields.io/badge/Next.js-16.1-black?logo=nextdotjs)
-![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=black)
-![TypeScript](https://img.shields.io/badge/TypeScript-5-3178C6?logo=typescript&logoColor=white)
+Paste a video or playlist link, pick any quality (up to 4K) or audio only,
+and watch every download come in live on its own TV.
+
+[![Docker Hub](https://img.shields.io/badge/Docker_Hub-sami999%2Fvideo--grabber-2496ED?logo=docker&logoColor=white)](https://hub.docker.com/r/sami999/video-grabber)
+[![Docker version](https://img.shields.io/docker/v/sami999/video-grabber?sort=semver&logo=docker&logoColor=white&label=version)](https://hub.docker.com/r/sami999/video-grabber/tags)
+[![Image size](https://img.shields.io/docker/image-size/sami999/video-grabber/latest?logo=docker&logoColor=white&label=image)](https://hub.docker.com/r/sami999/video-grabber/tags)
+[![Docker pulls](https://img.shields.io/docker/pulls/sami999/video-grabber?logo=docker&logoColor=white)](https://hub.docker.com/r/sami999/video-grabber)
+
+![Next.js](https://img.shields.io/badge/Next.js-16-black?logo=nextdotjs)
+![React](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=black)
 ![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?logo=tailwindcss&logoColor=white)
-![Python](https://img.shields.io/badge/Python-3.11-3776AB?logo=python&logoColor=white)
 ![Django](https://img.shields.io/badge/Django-5.2-092E20?logo=django&logoColor=white)
-![DRF](https://img.shields.io/badge/DRF-3.16-A30000?logo=django&logoColor=white)
-![yt-dlp](https://img.shields.io/badge/yt--dlp-FF0000?logo=youtube&logoColor=white)
-![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
+![yt-dlp](https://img.shields.io/badge/yt--dlp-latest-FF0000?logo=youtube&logoColor=white)
+![FFmpeg](https://img.shields.io/badge/FFmpeg-merge_%26_convert-007808?logo=ffmpeg&logoColor=white)
+
+<img src="docs/screenshots/hero.png" alt="Video Grabber: a pile of TVs and speakers, each busy TV showing a download's thumbnail and live progress, with the download list on the right" width="100%">
 
 </div>
 
 ---
 
-## About
+## ⚡ Quick start
 
-Video Grabber is a small web app for saving videos from the sites yt-dlp supports. The backend is
-a stateless Django REST Framework API (no database, no auth): one endpoint reads a video's
-metadata and formats, the other downloads the chosen format to a temporary folder, streams it back
-and deletes it. The frontend is a single animated Next.js page with a particle background and a
-custom cursor.
+One container, one port. The image already has the frontend, the API, yt-dlp, FFmpeg and Deno.
 
-## Features
-
-**Backend** (`backend/`)
-
-- `POST /api/info/` runs yt-dlp without downloading and returns the title, thumbnail, duration,
-  uploader and a cleaned-up format list: video formats with sound (by resolution, highest first),
-  audio-only formats (by bitrate), and a "Best Quality" option on top
-- `POST /api/download/` downloads the chosen `format_id` (or `best`, which prefers a single mp4)
-  into a temp folder, streams it as an attachment with a sanitised filename, and removes the
-  folder once the response is closed
-- Settings split into modules (apps, CORS, DRF, i18n, security, logging) plus a `dev` / `prod`
-  environment chosen by `DJANGO_ENV`
-- A custom DRF exception handler and JSON logs written to `backend/logs/`
-- CORS open to the frontend on `localhost:3000`
-- Docker image on Python 3.11 Alpine with FFmpeg installed
-
-**Frontend** (`frontend/`)
-
-- One page (`src/app/page.tsx`): a URL field (Enter or the "Grab Video" button), then a results
-  view with the thumbnail, title, duration, format count and a download button per format
-- API calls through TanStack Query mutations (`src/lib/api.ts`), with loading spinners and error
-  messages from the API
-- The download arrives as a blob and is saved by the browser
-- Framer Motion transitions, a canvas particle system and a trailing custom cursor
-- shadcn/ui components (Radix / Base UI) with Tailwind CSS 4
-
-## Tech stack
-
-| Layer | Technology |
-|---|---|
-| Frontend | Next.js 16 (App Router), React 19, TypeScript |
-| Styling / UI | Tailwind CSS 4, shadcn/ui, Framer Motion, lucide-react |
-| Data fetching | TanStack Query 5 |
-| Backend | Python 3.11, Django 5.2, Django REST Framework 3.16 |
-| Video | yt-dlp, FFmpeg (in the Docker image) |
-| Other | django-cors-headers, python-dotenv |
-| Runtime | Docker Compose (API service) |
-
-## Project structure
-
-```text
-backend/
-├── apps/downloader/      # views (info, download), services (yt-dlp calls), urls
-├── common/
-│   ├── exceptions/       # app errors and the DRF exception handler
-│   ├── http/             # response helpers
-│   └── utils/log.py      # structured logging helper
-├── config/
-│   ├── settings/
-│   │   ├── base.py
-│   │   ├── modules/      # apps, cors, drf, i18n, logging, middlewares, security
-│   │   └── environments/ # dev.py, prod.py
-│   └── urls.py           # /api/ → apps.downloader
-├── dockerfile
-├── manage.py
-└── requirements.txt
-frontend/
-├── src/app/page.tsx      # the whole UI
-├── src/components/       # ParticleSystem, CustomCursor, Providers, ui/ (shadcn)
-└── src/lib/api.ts        # calls to the backend
-docker-compose.yml        # runs the API on port 8000
+```bash
+docker run -d --name video-grabber -p 8000:8000 \
+  -v video-grabber-data:/data \
+  sami999/video-grabber:latest
 ```
 
-## API
+Open **http://localhost:8000**, paste a link, hit **Tune in**, pick what you want and **Grab**.
 
-Base URL: `http://localhost:8000/api`. Both endpoints take JSON.
+<details>
+<summary><b>Docker Compose</b></summary>
 
-| Method | Path | Body | What it does |
+```yaml
+services:
+  video-grabber:
+    image: sami999/video-grabber:latest
+    ports:
+      - "8000:8000"
+    environment:
+      MAX_PARALLEL_DOWNLOADS: 3
+    volumes:
+      - data:/data   # uploaded YouTube cookies survive restarts
+    restart: unless-stopped
+
+volumes:
+  data:
+```
+
+```bash
+docker compose up -d
+```
+
+</details>
+
+## ✨ Features
+
+| | |
+|---|---|
+| 🎚️ **Every quality** | Each resolution the site offers, from 144p to 4K/8K, marked with 60fps / HDR, the container you'll get (MP4, or MKV when the codecs need it) and an estimated size |
+| 🎧 **Audio only** | Original AAC (M4A) or Opus, or converted to MP3 at 192 kbps |
+| 📼 **Playlists** | Lists every video with thumbnails; tick the ones you want, pick one quality cap for all of them and queue them in one go |
+| 📡 **Live progress** | Server-Sent Events push percent, size, speed, ETA, which stream (video, then audio) and the merge / convert step |
+| 🔀 **Parallel downloads** | A worker pool runs several at once (3 by default); the rest wait on standby. Cancel, retry or remove any of them |
+| 💾 **Straight to disk** | Finished files go to the browser's own download manager (auto-save is optional); nothing is held in browser memory |
+| 🍪 **YouTube-proof** | Upload a `cookies.txt` from the page when YouTube says *"confirm you're not a bot"*; cookies are only used when the site insists, so they never cost you quality |
+| 📱 **Works on phones** | The whole station folds down to a single column |
+
+## 🖼️ Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/formats.png" alt="Single video: every resolution from 4K down to 144p, plus AAC, Opus and MP3"></td>
+    <td width="50%"><img src="docs/screenshots/playlist.png" alt="Playlist: thumbnails, per-video toggles and one quality for all"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Pick any quality</b><br><sub>4K, 1440p, 1080p… or audio only</sub></td>
+    <td align="center"><b>Whole playlists</b><br><sub>choose videos, one quality cap, Grab ×N</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/saved.png" alt="Saved files: finished downloads ready to save again"></td>
+    <td width="50%"><img src="docs/screenshots/cookies.png" alt="Cookies panel: upload a cookies.txt for YouTube"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Saved files</b><br><sub>every TV turns green when it's ready</sub></td>
+    <td align="center"><b>Cookies</b><br><sub>get past YouTube's bot check</sub></td>
+  </tr>
+</table>
+
+<p align="center">
+  <img src="docs/screenshots/mobile.png" alt="The station on a phone" width="300">
+</p>
+
+## 🧠 How it works
+
+```mermaid
+flowchart LR
+    B["Browser<br/>(Next.js static page)"] -- "POST /api/info" --> D["Django API"]
+    B -- "POST /api/jobs" --> D
+    D -- "Server-Sent Events<br/>/api/jobs/stream" --> B
+    D --> P["Job pool<br/>(N parallel)"]
+    P --> Y["yt-dlp<br/>+ Deno"]
+    Y --> F["FFmpeg<br/>merge / MP3"]
+    F --> T[("/downloads<br/>kept 6 h")]
+    T -- "GET /api/jobs/:id/file" --> B
+```
+
+- **Lookup**: `/api/info/` asks yt-dlp what a link offers, without downloading. Choices are
+  heights (`h1080`), not format ids, so a download still works if YouTube hands out a different
+  client's formats a minute later.
+- **Jobs**: each choice becomes a job in an in-memory pool. yt-dlp's progress hooks update it, and
+  every change goes out to all open tabs over one event stream.
+- **Files**: video and audio streams are merged by FFmpeg (MP3 is converted), served once finished
+  and deleted after `JOB_TTL_HOURS`.
+- **YouTube**: requests go out without cookies first. Only if YouTube demands a signed-in user is
+  the request repeated with your cookies. A job that comes out below the chosen resolution says so.
+
+## ⚙️ Configuration
+
+Pass with `-e NAME=value` (or `environment:` in Compose).
+
+| Variable | Default | What it does |
+|---|---|---|
+| `MAX_PARALLEL_DOWNLOADS` | `3` | Downloads that run at the same time; the rest wait |
+| `JOB_TTL_HOURS` | `6` | How long finished files stay on the server |
+| `ALLOWED_HOSTS` | `*` | Comma-separated host names the app answers to |
+| `SECRET_KEY` | built-in fallback | Django secret key (nothing signs with it today, set it anyway) |
+| `DATA_DIR` | `/data` | Where uploaded cookies live; mount a volume here |
+| `DOWNLOAD_DIR` | `/downloads` | Where jobs write their files (emptied on start) |
+| `COOKIES_FILE` | unset | A mounted `cookies.txt` to use when none was uploaded |
+| `WEB_THREADS` | `32` | Gunicorn threads; each open tab holds one for its live stream |
+| `TIME_ZONE` / `LANGUAGE_CODE` | `UTC` / `en-us` | Django localisation |
+
+> [!NOTE]
+> Jobs live in memory, so the app runs as a single Gunicorn process. Restarting the container
+> clears the queue and the finished files (uploaded cookies stay in `/data`).
+
+## 🍪 YouTube says "Sign in to confirm you're not a bot"
+
+YouTube says that to IP addresses it distrusts: servers, VPNs, or lots of requests in a short time.
+It's about the address, not the link, and it often lifts after a while. To get past it:
+
+1. Log in to YouTube in your browser (a spare account is safest).
+2. Export the cookies as `cookies.txt` with an extension such as **Get cookies.txt LOCALLY**.
+3. In the app, open **Cookies** and upload the file. The top bar shows **Cookies on**.
+
+> [!WARNING]
+> The app has no login. Anyone who can open the page can queue downloads and use the account
+> behind the cookies. Keep it on your own machine or network, or put it behind a proxy with
+> authentication.
+
+## 🔌 API
+
+Base URL `/api`, JSON bodies.
+
+| Method | Path | Body | Does |
 |---|---|---|---|
-| POST | `/api/info/` | `{ "url": "…" }` | metadata and the list of available formats |
-| POST | `/api/download/` | `{ "url": "…", "format_id": "best" }` | downloads that format and returns the file |
+| `GET` | `/status/` | | `{ max_parallel, cookies }` |
+| `POST` | `/info/` | `{ url }` | Video formats, or playlist entries (`kind` says which) |
+| `GET` | `/jobs/` | | All jobs |
+| `POST` | `/jobs/` | `{ items: [{ url, format_id, label?, title?, thumbnail?, group? }] }` | Queues one job per item |
+| `GET` | `/jobs/stream/` | | Server-Sent Events: `{ jobs: [...] }` on every change |
+| `POST` | `/jobs/:id/cancel/` | | Stops a job, keeps it listed |
+| `POST` | `/jobs/:id/retry/` | | Replaces a failed or cancelled job |
+| `DELETE` | `/jobs/:id/` | | Cancels if needed, removes the job and its file |
+| `POST` | `/jobs/clear/` | | Removes finished, failed and cancelled jobs |
+| `GET` | `/jobs/:id/file/` | | The finished file |
+| `POST` / `DELETE` | `/cookies/` | multipart `file` | Stores / forgets an uploaded `cookies.txt` |
 
-Errors come back as `400` with `{ "error": "…" }`.
+`format_id`: `best`, an exact height from `/info/` (`h2160`, `h1080`…), a cap for playlists
+(`1080p`), `audio` (M4A), `audio-opus`, `audio-mp3`, or any raw yt-dlp format selector.
 
-## Getting started
-
-**Prerequisites:** Docker with Compose (or Python 3.11 and FFmpeg), Node.js 20+ and npm.
+<details>
+<summary><b>Example: queue a 1080p download and an MP3 from the command line</b></summary>
 
 ```bash
-git clone https://github.com/sami999khan999/video_grabber.git
-cd video_grabber
+curl -X POST http://localhost:8000/api/jobs/ -H 'Content-Type: application/json' -d '{
+  "items": [
+    { "url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ", "format_id": "h1080" },
+    { "url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ", "format_id": "audio-mp3" }
+  ]
+}'
+curl -N http://localhost:8000/api/jobs/stream/   # watch them come in
 ```
 
-### 1. Backend
+</details>
 
-Create `backend/.env` from the example and fill in the values:
+## 🛠️ Development
 
-```bash
-cp backend/.env.example backend/.env
-```
-
-| Variable | Used for |
-|---|---|
-| `SECRET_KEY` | Django secret key |
-| `LANGUAGE_CODE` | Django language (default `en-us`) |
-| `TIME_ZONE` | Django time zone (default `UTC`) |
-| `DJANGO_ENV` | optional: `dev` (default) or `prod` settings |
-
-Run it with Docker Compose (the `develop.watch` block syncs code changes into the container):
+**Needs:** Python 3.11, FFmpeg, [Deno](https://deno.com) (yt-dlp uses it for YouTube), Node.js 20+
+and pnpm.
 
 ```bash
-docker compose up --build      # or: docker compose watch
-```
-
-Or without Docker:
-
-```bash
+# API on :8000
 cd backend
 python -m venv .venv && source .venv/bin/activate
 pip install -r requirements.txt
 python manage.py runserver 8000
-```
 
-### 2. Frontend
-
-```bash
+# UI on :3000 (talks to the API on :8000; override with NEXT_PUBLIC_API_BASE)
 cd frontend
-npm install
-npm run dev                    # http://localhost:3000
+pnpm install
+pnpm dev
 ```
 
-```bash
-npm run build && npm run start # production build
-npm run lint
+`pnpm build` writes a static export to `frontend/out`, which Django serves at `/` (that's how the
+image works). Build the image yourself with `docker build -t video-grabber .`; add `--no-cache`
+to pick up the newest yt-dlp.
+
+<details>
+<summary><b>Project structure</b></summary>
+
+```text
+backend/
+├── apps/downloader/
+│   ├── jobs.py           # job pool: progress, cancel, retry, cleanup
+│   ├── services.py       # /info/: formats and playlist entries
+│   ├── ytdlp.py          # yt-dlp runner, cookies (upload + fallback)
+│   └── views.py, urls.py
+├── common/               # errors, logging helpers
+└── config/settings/      # split settings, dev / prod, WhiteNoise for the UI
+frontend/
+├── src/app/page.tsx      # the station
+├── src/app/wall.css      # TVs, speakers, stickers, pills
+├── src/components/wall/  # TvWall, TopBar, SideRail, panels, BottomBar
+├── src/hooks/use-jobs.ts # live job list (Server-Sent Events)
+└── src/lib/api.ts
+Dockerfile                # Node builds the UI, Python + FFmpeg + Deno run it all
+docker-compose.yml
 ```
 
-The frontend calls the API at `http://127.0.0.1:8000/api` (hard-coded in `src/lib/api.ts`).
+</details>
 
-## Status
+## 🙏 Credits
 
-Early, single-commit project. Docker Compose runs only the API; the frontend is started on its
-own. Known gaps: the format list on the frontend reads a `resolution` field the API doesn't send
-(the API sends `quality`), so every row shows "Auto", and downloaded files are always named
-`.mp4`, even audio-only formats.
+- [yt-dlp](https://github.com/yt-dlp/yt-dlp) does the real work; [FFmpeg](https://ffmpeg.org)
+  merges and converts; [Deno](https://deno.com) runs YouTube's JavaScript for yt-dlp.
+- The video in the screenshots is *Big Buck Bunny* © Blender Foundation,
+  [CC BY 3.0](https://creativecommons.org/licenses/by/3.0/). The other thumbnails are generated
+  FFmpeg test patterns.
+
+> Only download what you have the right to download, and respect the terms of the sites you use.

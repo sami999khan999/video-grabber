@@ -1,27 +1,17 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono, Outfit } from "next/font/google";
+import { Playfair_Display, Rubik } from "next/font/google";
 import "./globals.css";
-import { cn } from "@/lib/utils";
-import { TooltipProvider } from "@/components/ui/tooltip";
+import "./wall.css";
 
 import Providers from "@/components/Providers";
 
-const outfit = Outfit({ subsets: ["latin"], variable: "--font-sans" });
-
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
+const ui = Rubik({ subsets: ["latin"], variable: "--font-ui", weight: ["500", "600", "700", "800", "900"] });
+const title = Playfair_Display({ subsets: ["latin"], variable: "--font-title", weight: ["900"], style: ["italic"] });
 
 export const metadata: Metadata = {
-  title: "Video Grabber — Download Videos Instantly",
+  title: "Video Grabber",
   description:
-    "Paste a video URL and download it in your preferred format and quality.",
+    "Paste a video or playlist link and pull it down: live progress, parallel downloads.",
 };
 
 export default function RootLayout({
@@ -30,13 +20,9 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={cn("font-sans", outfit.variable)}>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Providers>
-          <TooltipProvider>{children}</TooltipProvider>
-        </Providers>
+    <html lang="en" className={`${ui.variable} ${title.variable}`}>
+      <body className="pp-ui antialiased">
+        <Providers>{children}</Providers>
       </body>
     </html>
   );

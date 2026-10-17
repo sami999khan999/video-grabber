@@ -1,16 +1,25 @@
 services:
-  api:
-    container_name: video_grabber_api
-    build: ./backend
+  app:
+    container_name: video_grabber
+    build: .
+    image: video-grabber
     ports:
       - 8000:8000
-    env_file: "./backend/.env"
-    develop:
-      watch:
-        - path: ./backend/requirements.txt
-          action: rebuild
-        - path: ./backend
-          target: /app
-          action: sync
+    env_file:
+      - path: ./backend/.env
+        required: false
+    environment:
+      MAX_PARALLEL_DOWNLOADS: ${MAX_PARALLEL_DOWNLOADS:-3}
+      # Cookies are easiest to add from the page (Auth button). To mount a file instead,
+      # uncomment this and the cookies volume below.
+      # COOKIES_FILE: /cookies/cookies.txt
     volumes:
-      - ./backend/logs:/app/logs
+      - logs:/app/logs
+      # Uploaded cookies live here, so they survive restarts
+      - data:/data
+      # - ./cookies.txt:/cookies/cookies.txt:ro
+    restart: unless-stopped
+
+volumes:
+  logs:
+  data:

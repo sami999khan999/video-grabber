@@ -4,3 +4,6 @@ CORS_ALLOWED_ORIGINS = [
 ]
 
 CORS_ALLOW_CREDENTIALS = True
+
+# Lets the frontend read the download filename when it runs on another origin (dev)
+CORS_EXPOSE_HEADERS = ["Content-Disposition"]

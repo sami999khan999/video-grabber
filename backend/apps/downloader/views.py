@@ -1,19 +1,60 @@
+import json
 import os
-import shutil
+import time
 
 from rest_framework.views import APIView
 from rest_framework.response import Response
 from rest_framework import status
-from django.http import FileResponse
+from django.http import FileResponse, Http404, StreamingHttpResponse
+from django.views.decorators.http import require_GET
 
-from .services import extract_video_info, download_video
+from .jobs import FINISHED, MAX_PARALLEL_DOWNLOADS, clean_error, get_manager
+from .services import extract_video_info
+from .ytdlp import cookies_source, delete_uploaded_cookies, save_uploaded_cookies
+
+
+class StatusView(APIView):
+    """GET /api/status/ -> how the downloader is configured."""
+
+    def get(self, request):
+        return Response({
+            "max_parallel": MAX_PARALLEL_DOWNLOADS,
+            # "upload" (added from the page), "file" (COOKIES_FILE) or null
+            "cookies": cookies_source(),
+        })
+
+
+class CookiesView(APIView):
+    """
+    POST   /api/cookies/  -> store a Netscape cookies.txt (multipart "file", or JSON "content")
+    DELETE /api/cookies/  -> forget the uploaded cookies
+    """
+
+    def post(self, request):
+        upload = request.FILES.get("file")
+        if upload:
+            content = upload.read()
+        else:
+            content = (request.data.get("content") or "").encode("utf-8")
+        if not content:
+            return Response({"error": "Send a cookies.txt file."}, status=status.HTTP_400_BAD_REQUEST)
+        try:
+            count = save_uploaded_cookies(content)
+        except ValueError as e:
+            return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
+        return Response({"cookies": cookies_source(), "count": count}, status=status.HTTP_201_CREATED)
+
+    def delete(self, request):
+        delete_uploaded_cookies()
+        return Response({"cookies": cookies_source()})
 
 
 class VideoInfoView(APIView):
     """
     POST /api/info/
     Body: { "url": "https://..." }
-    Returns video metadata: title, thumbnail, duration, available formats.
+    Returns video metadata (title, thumbnail, duration, formats),
+    or for a playlist link its title and entries.
     """
 
     def post(self, request):
@@ -29,68 +70,120 @@ class VideoInfoView(APIView):
             return Response(info, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(
-                {"error": str(e)},
+                {"error": clean_error(e)},
                 status=status.HTTP_400_BAD_REQUEST,
             )
 
 
-class VideoDownloadView(APIView):
+class JobListView(APIView):
     """
-    POST /api/download/
-    Body: { "url": "https://...", "format_id": "best" }
-    Downloads the video and streams the file back to the client.
+    GET  /api/jobs/  -> all jobs
+    POST /api/jobs/  -> queue downloads
+    Body: { "items": [{ "url", "format_id", "label"?, "title"?, "thumbnail"?, "group"? }] }
     """
+
+    def get(self, request):
+        _, jobs = get_manager().snapshot()
+        return Response({"jobs": jobs})
 
     def post(self, request):
-        url = request.data.get("url")
-        format_id = request.data.get("format_id", "best")
-
-        if not url:
+        items = request.data.get("items")
+        if not isinstance(items, list) or not items:
             return Response(
-                {"error": "URL is required."},
+                {"error": "items must be a non-empty list."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        for item in items:
+            if not isinstance(item, dict) or not item.get("url"):
+                return Response(
+                    {"error": "Every item needs a url."},
+                    status=status.HTTP_400_BAD_REQUEST,
+                )
 
-        filepath = None
-        tmp_dir = None
+        jobs = get_manager().create(items)
+        return Response(
+            {"jobs": [job.to_dict() for job in jobs]},
+            status=status.HTTP_201_CREATED,
+        )
 
-        try:
-            result = download_video(url, format_id)
-            filepath = result["filepath"]
-            tmp_dir = os.path.dirname(filepath)
-            
-            # Sanitize filename for Content-Disposition
-            safe_title = "".join([c for c in result["title"] if c.isalnum() or c in " .-_"]).strip()
-            filename = f"{safe_title}.{result['ext']}"
 
-            response = FileResponse(
-                open(filepath, "rb"),
-                content_type="application/octet-stream",
-            )
-            response["Content-Disposition"] = (
-                f'attachment; filename="{filename}"'
-            )
+class JobDetailView(APIView):
+    """DELETE /api/jobs/<id>/ -> cancel the job if it runs, and remove it."""
 
-            # Clean up temp directory after response is sent
-            original_close = response.close
+    def delete(self, request, job_id):
+        if not get_manager().remove(job_id):
+            return Response({"error": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(status=status.HTTP_204_NO_CONTENT)
 
-            def cleanup_close():
-                original_close()
-                try:
-                    if tmp_dir and os.path.exists(tmp_dir):
-                        shutil.rmtree(tmp_dir)
-                except Exception:
-                    pass
 
-            response.close = cleanup_close
+class JobCancelView(APIView):
+    """POST /api/jobs/<id>/cancel/ -> stop the job but keep it in the list."""
 
-            return response
+    def post(self, request, job_id):
+        job = get_manager().cancel(job_id)
+        if not job:
+            return Response({"error": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(job.to_dict())
 
-        except Exception as e:
-            # Clean up on error
-            if tmp_dir and os.path.exists(tmp_dir):
-                shutil.rmtree(tmp_dir)
+
+class JobRetryView(APIView):
+    """POST /api/jobs/<id>/retry/ -> replace a failed or cancelled job with a fresh one."""
+
+    def post(self, request, job_id):
+        manager = get_manager()
+        job = manager.get(job_id)
+        if not job:
+            return Response({"error": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+        if job.status not in FINISHED:
             return Response(
-                {"error": str(e)},
+                {"error": "Job is still running."},
                 status=status.HTTP_400_BAD_REQUEST,
             )
+        return Response(manager.retry(job_id).to_dict(), status=status.HTTP_201_CREATED)
+
+
+class JobClearView(APIView):
+    """POST /api/jobs/clear/ -> remove every finished, failed or cancelled job."""
+
+    def post(self, request):
+        return Response({"removed": get_manager().clear_finished()})
+
+
+@require_GET
+def job_file(request, job_id):
+    """GET /api/jobs/<id>/file/ -> the downloaded file as an attachment."""
+    job = get_manager().get(job_id)
+    if not job or job.status != "done" or not job.filepath or not os.path.exists(job.filepath):
+        raise Http404("File not available.")
+    return FileResponse(
+        open(job.filepath, "rb"),
+        as_attachment=True,
+        filename=job.filename,
+        content_type="application/octet-stream",
+    )
+
+
+@require_GET
+def job_stream(request):
+    """
+    GET /api/jobs/stream/ -> Server-Sent Events with the full job list
+    whenever it changes (at most ~4 times a second), plus a keep-alive ping.
+    """
+    manager = get_manager()
+
+    def events():
+        version = -1
+        yield "retry: 2000\n\n"
+        while True:
+            new_version, jobs = manager.wait_for_change(version, timeout=15)
+            if new_version == version:
+                yield ": ping\n\n"
+                continue
+            version = new_version
+            yield f"data: {json.dumps({'jobs': jobs})}\n\n"
+            time.sleep(0.25)
+
+    response = StreamingHttpResponse(events(), content_type="text/event-stream")
+    response["Cache-Control"] = "no-cache"
+    response["X-Accel-Buffering"] = "no"
+    return response

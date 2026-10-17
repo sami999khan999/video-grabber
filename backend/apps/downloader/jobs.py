@@ -1,0 +1,411 @@
+import os
+import re
+import shutil
+import tempfile
+import threading
+import time
+import uuid
+from concurrent.futures import ThreadPoolExecutor
+
+from yt_dlp.utils import DownloadCancelled
+
+from common.utils.log import log
+
+from .ytdlp import extract
+
+# Jobs live in memory, so the app must run as a single process (threads are fine)
+MAX_PARALLEL_DOWNLOADS = int(os.environ.get("MAX_PARALLEL_DOWNLOADS", "3"))
+JOB_TTL_SECONDS = float(os.environ.get("JOB_TTL_HOURS", "6")) * 3600
+DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR") or os.path.join(
+    tempfile.gettempdir(), "video-grabber"
+)
+
+ACTIVE = {"queued", "starting", "downloading", "processing", "merging"}
+FINISHED = {"done", "error", "cancelled"}
+
+# Video joins the AAC track when there is one, so most downloads fit in mp4
+PRESETS = {
+    "best": "bv*+ba[ext=m4a]/bv*+ba/b",
+    "audio": "ba[ext=m4a]/ba/b",
+    "audio-opus": "ba[acodec^=opus]/ba",
+    # Converted to mp3 afterwards (see MP3_POSTPROCESSOR); any audio will do as the source
+    "audio-mp3": "ba/b",
+}
+
+MP3_POSTPROCESSOR = {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
+
+STAGE_NAMES = {
+    "Merger": "Merging streams",
+    "ExtractAudio": "Converting to MP3",
+    "FixupM3u8": "Fixing stream",
+    "FixupM4a": "Fixing audio",
+}
+
+
+def format_selector(format_id: str) -> str:
+    """
+    Turn what the client sent into a yt-dlp format selector: a preset ("best", "audio",
+    "audio-mp3", ...), an exact height from /api/info/ ("h1080"), a height cap for
+    playlists ("720p"), or a raw yt-dlp selector.
+    """
+    if not format_id:
+        return PRESETS["best"]
+    if format_id in PRESETS:
+        return PRESETS[format_id]
+    exact = re.fullmatch(r"h(\d{2,4})", format_id)
+    if exact:
+        h = exact.group(1)
+        # That height (H.264 first, for compatibility), then the nearest lower one
+        return (
+            f"bv*[height={h}][vcodec^=avc1]+ba[ext=m4a]/bv*[height={h}]+ba[ext=m4a]/"
+            f"bv*[height={h}]+ba/b[height={h}]/bv*[height<={h}]+ba/b[height<={h}]/b"
+        )
+    cap = re.fullmatch(r"(\d{3,4})p", format_id)
+    if cap:
+        h = cap.group(1)
+        return f"bv*[height<={h}]+ba[ext=m4a]/bv*[height<={h}]+ba/b[height<={h}]/b"
+    return format_id
+
+
+def clean_error(exc: Exception) -> str:
+    message = str(exc) or exc.__class__.__name__
+    if re.search(r"confirm you.re not a bot|Sign in to confirm", message):
+        return (
+            "YouTube is blocking this server and wants a signed-in user "
+            "(\"confirm you're not a bot\"). Upload cookies.txt from a browser that is "
+            "logged in to YouTube, then try again."
+        )
+    return re.sub(r"^ERROR:\s*", "", message)
+
+
+class Job:
+    def __init__(self, url, format_id, label=None, title=None, thumbnail=None, group=None):
+        self.id = uuid.uuid4().hex[:12]
+        self.url = url
+        self.format_id = format_id or "best"
+        self.label = label or self.format_id
+        self.title = title or ""
+        self.thumbnail = thumbnail or ""
+        self.group = group
+        self.status = "queued"
+        self.stage = ""
+        self.progress = 0.0
+        self.downloaded_bytes = 0
+        self.total_bytes = None
+        self.speed = None
+        self.eta = None
+        self.stream = ""
+        self.streams_done = 0
+        self.filepath = None
+        self.filename = None
+        self.filesize = None
+        self.error = None
+        # Something worth knowing about a finished job, e.g. it came out below the chosen quality
+        self.notice = None
+        self.created_at = time.time()
+        self.finished_at = None
+        self.cancel_event = threading.Event()
+        self.future = None
+
+    @property
+    def dir(self):
+        return os.path.join(DOWNLOAD_DIR, self.id)
+
+    def to_dict(self):
+        return {
+            "id": self.id,
+            "url": self.url,
+            "format_id": self.format_id,
+            "label": self.label,
+            "title": self.title,
+            "thumbnail": self.thumbnail,
+            "group": self.group,
+            "status": self.status,
+            "stage": self.stage,
+            "progress": round(self.progress, 1),
+            "downloaded_bytes": self.downloaded_bytes,
+            "total_bytes": self.total_bytes,
+            "speed": self.speed,
+            "eta": self.eta,
+            "stream": self.stream,
+            "filename": self.filename,
+            "filesize": self.filesize,
+            "error": self.error,
+            "notice": self.notice,
+            "created_at": self.created_at,
+            "finished_at": self.finished_at,
+        }
+
+
+class JobManager:
+    def __init__(self):
+        self._jobs = {}
+        self._cond = threading.Condition()
+        self._version = 0
+        self._executor = ThreadPoolExecutor(
+            max_workers=MAX_PARALLEL_DOWNLOADS, thread_name_prefix="download"
+        )
+        # Files from a previous run have no job left pointing at them
+        shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
+        os.makedirs(DOWNLOAD_DIR, exist_ok=True)
+        threading.Thread(target=self._sweep_loop, daemon=True).start()
+
+    # --- state -------------------------------------------------------------
+
+    def _touch(self):
+        with self._cond:
+            self._version += 1
+            self._cond.notify_all()
+
+    def _update(self, job, **fields):
+        with self._cond:
+            for key, value in fields.items():
+                setattr(job, key, value)
+            self._version += 1
+            self._cond.notify_all()
+
+    def snapshot(self):
+        with self._cond:
+            return self._version, [job.to_dict() for job in self._jobs.values()]
+
+    def wait_for_change(self, since, timeout):
+        """Block until the state is newer than `since` (or the timeout passes)."""
+        with self._cond:
+            self._cond.wait_for(lambda: self._version != since, timeout=timeout)
+            return self._version, [job.to_dict() for job in self._jobs.values()]
+
+    def get(self, job_id):
+        with self._cond:
+            return self._jobs.get(job_id)
+
+    # --- actions -----------------------------------------------------------
+
+    def create(self, items):
+        jobs = []
+        for item in items:
+            job = Job(
+                url=item["url"],
+                format_id=item.get("format_id"),
+                label=item.get("label"),
+                title=item.get("title"),
+                thumbnail=item.get("thumbnail"),
+                group=item.get("group"),
+            )
+            with self._cond:
+                self._jobs[job.id] = job
+            job.future = self._executor.submit(self._run, job)
+            jobs.append(job)
+        self._touch()
+        return jobs
+
+    def cancel(self, job_id):
+        job = self.get(job_id)
+        if not job or job.status in FINISHED:
+            return job
+        job.cancel_event.set()
+        # A job still waiting in the pool never starts
+        if job.future and job.future.cancel():
+            self._update(job, status="cancelled", finished_at=time.time())
+        return job
+
+    def remove(self, job_id):
+        job = self.get(job_id)
+        if not job:
+            return False
+        self.cancel(job_id)
+        with self._cond:
+            self._jobs.pop(job_id, None)
+        # A running job deletes its own folder when it notices the cancel
+        if job.status in FINISHED:
+            shutil.rmtree(job.dir, ignore_errors=True)
+        self._touch()
+        return True
+
+    def retry(self, job_id):
+        job = self.get(job_id)
+        if not job:
+            return None
+        self.remove(job_id)
+        return self.create([{
+            "url": job.url,
+            "format_id": job.format_id,
+            "label": job.label,
+            "title": job.title,
+            "thumbnail": job.thumbnail,
+            "group": job.group,
+        }])[0]
+
+    def clear_finished(self):
+        with self._cond:
+            finished = [j for j in self._jobs.values() if j.status in FINISHED]
+        for job in finished:
+            self.remove(job.id)
+        return len(finished)
+
+    # --- download ----------------------------------------------------------
+
+    def _run(self, job):
+        if job.cancel_event.is_set():
+            return
+        self._update(job, status="starting", stage="Resolving")
+        os.makedirs(job.dir, exist_ok=True)
+
+        opts = dict(
+            noprogress=True,
+            noplaylist=True,
+            outtmpl=os.path.join(job.dir, "%(id)s.%(ext)s"),
+            # Merged video + audio goes into mp4 when the codecs allow it, mkv otherwise
+            merge_output_format="mp4/mkv",
+            format=format_selector(job.format_id),
+            progress_hooks=[lambda d: self._on_progress(job, d)],
+            postprocessor_hooks=[lambda d: self._on_postprocess(job, d)],
+        )
+        if job.format_id == "audio-mp3":
+            opts["postprocessors"] = [MP3_POSTPROCESSOR]
+
+        try:
+            log("info", f"Job {job.id}: downloading {job.url} as {job.format_id}")
+            # YouTube now and then refuses a stream with 403 (often when several downloads of
+            # the same video run at once); a second try usually gets through
+            for attempt in (1, 2):
+                try:
+                    info = extract(job.url, download=True, **opts)
+                    break
+                except DownloadCancelled:
+                    raise
+                except Exception as exc:
+                    if attempt == 2 or job.cancel_event.is_set() or "HTTP Error 403" not in str(exc):
+                        raise
+                    log("warning", f"Job {job.id}: 403, trying once more")
+                    self._update(job, status="starting", stage="Retrying", progress=0.0, streams_done=0)
+
+            # requested_downloads holds the final path (after merging); fall back
+            # to the largest file in the job folder
+            downloads = info.get("requested_downloads") or []
+            filepath = downloads[0].get("filepath") if downloads else None
+            if not filepath or not os.path.exists(filepath):
+                files = [os.path.join(job.dir, n) for n in os.listdir(job.dir)]
+                files = [f for f in files if not f.endswith(".part")]
+                if not files:
+                    raise ValueError("Download finished but no file was produced.")
+                filepath = max(files, key=os.path.getsize)
+
+            title = job.title or info.get("title") or "video"
+            safe_title = "".join(
+                c for c in title if c.isalnum() or c in " .-_()[]"
+            ).strip() or "video"
+            ext = os.path.splitext(filepath)[1]
+
+            notice = None
+            wanted = re.fullmatch(r"h(\d{2,4})", job.format_id)
+            got = info.get("height")
+            if wanted and got and got < int(wanted.group(1)):
+                notice = (
+                    f"Got {got}p instead of {wanted.group(1)}p: the site only offered up to "
+                    f"{got}p for this download. Try again later for the full quality."
+                )
+
+            self._update(
+                job,
+                status="done",
+                stage="Ready",
+                progress=100.0,
+                title=title,
+                thumbnail=job.thumbnail or info.get("thumbnail") or "",
+                filepath=filepath,
+                filename=f"{safe_title}{ext}",
+                filesize=os.path.getsize(filepath),
+                speed=None,
+                eta=None,
+                notice=notice,
+                finished_at=time.time(),
+            )
+            log("info", f"Job {job.id}: done", payload={"file": filepath})
+        except Exception as exc:
+            shutil.rmtree(job.dir, ignore_errors=True)
+            if job.cancel_event.is_set() or isinstance(exc, DownloadCancelled):
+                self._update(job, status="cancelled", stage="", speed=None, eta=None,
+                             finished_at=time.time())
+            else:
+                log("warning", f"Job {job.id}: failed", payload={"error": str(exc)})
+                self._update(job, status="error", stage="", error=clean_error(exc),
+                             speed=None, eta=None, finished_at=time.time())
+
+    def _on_progress(self, job, d):
+        if job.cancel_event.is_set():
+            raise DownloadCancelled("Cancelled")
+
+        info = d.get("info_dict") or {}
+        # Video + audio downloads report each stream separately, one after the other
+        streams = len(info.get("requested_formats") or []) or 1
+        fields = {}
+        if not job.title and info.get("title"):
+            fields["title"] = info["title"]
+        if not job.thumbnail and info.get("thumbnail"):
+            fields["thumbnail"] = info["thumbnail"]
+
+        if d["status"] == "downloading":
+            total = d.get("total_bytes") or d.get("total_bytes_estimate")
+            done = d.get("downloaded_bytes") or 0
+            if total:
+                fraction = min(done / total, 1.0)
+            elif d.get("fragment_count"):
+                fraction = (d.get("fragment_index") or 0) / d["fragment_count"]
+            else:
+                fraction = 0.0
+            index = min(job.streams_done, streams - 1)
+            kind = ""
+            if streams > 1:
+                vcodec = info.get("vcodec") or "none"
+                kind = "Video" if vcodec != "none" else "Audio"
+            self._update(
+                job,
+                status="downloading",
+                stage=f"{kind} stream" if kind else "Downloading",
+                progress=min((index + fraction) / streams * 100, 99.0),
+                downloaded_bytes=done,
+                total_bytes=total,
+                speed=d.get("speed"),
+                eta=d.get("eta"),
+                stream=f"{index + 1}/{streams}" if streams > 1 else "",
+                **fields,
+            )
+        elif d["status"] == "finished":
+            self._update(job, streams_done=job.streams_done + 1, **fields)
+
+    def _on_postprocess(self, job, d):
+        if job.cancel_event.is_set():
+            raise DownloadCancelled("Cancelled")
+        if d.get("status") != "started":
+            return
+        name = d.get("postprocessor") or ""
+        if name == "Merger":
+            self._update(job, status="merging", stage=STAGE_NAMES[name], speed=None, eta=None)
+        elif name != "MoveFiles":
+            self._update(job, status="processing", stage=STAGE_NAMES.get(name, name), speed=None, eta=None)
+
+    # --- cleanup -----------------------------------------------------------
+
+    def _sweep_loop(self):
+        while True:
+            time.sleep(300)
+            cutoff = time.time() - JOB_TTL_SECONDS
+            with self._cond:
+                expired = [
+                    j.id for j in self._jobs.values()
+                    if j.status in FINISHED and j.finished_at and j.finished_at < cutoff
+                ]
+            for job_id in expired:
+                self.remove(job_id)
+
+
+_manager = None
+_manager_lock = threading.Lock()
+
+
+def get_manager() -> JobManager:
+    global _manager
+    with _manager_lock:
+        if _manager is None:
+            _manager = JobManager()
+        return _manager

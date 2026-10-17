@@ -9,6 +9,7 @@ from .modules.cors import *
 from .modules.i18n import *
 from .modules.security import *
 from .modules.logging import *
+from .modules.frontend import *
 
 
 env_module_path = f"config.settings.environments.{ENVIRONMENT}"

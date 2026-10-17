@@ -1,135 +1,209 @@
-import os
-import tempfile
-import yt_dlp
+from yt_dlp.utils import get_compatible_ext
+
 from common.utils.log import log
+
+from .ytdlp import extract
 
 
 def extract_video_info(url: str) -> dict:
     """
     Extract video metadata (title, thumbnail, duration, available formats)
-    without downloading the video.
+    without downloading the video. Playlist links return the list of entries.
     """
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "skip_download": True,
-        "noplaylist": True,
-    }
+    log("info", f"Extracting info for URL: {url}")
+    info = extract(
+        url,
+        skip_download=True,
+        # A watch link that also carries a playlist id means the single video
+        noplaylist=True,
+        # Playlists are listed without resolving every entry (fast)
+        extract_flat="in_playlist",
+    )
+    log("info", "yt-dlp info extracted", payload={
+        "title": info.get("title"),
+        "duration": info.get("duration"),
+        "format_count": len(info.get("formats") or []),
+        "webpage_url": url,
+    })
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        log("info", f"Extracting info for URL: {url}")
-        info = ydl.extract_info(url, download=False)
-        # Log only a summary of info to prevent logger crashes
-        log_summary = {
-            "title": info.get("title"),
-            "duration": info.get("duration"),
-            "format_count": len(info.get("formats", [])),
-            "webpage_url": url,
-        }
-        log("info", "yt-dlp info extracted", payload=log_summary)
+    if info.get("_type") == "playlist" or info.get("entries") is not None:
+        return _playlist_info(info, url)
 
-    formats = []
-    seen = set()
+    formats = info.get("formats") or []
+    duration = info.get("duration") or 0
+    audio_only = [f for f in formats if _has_audio(f) and not _has_video(f)]
 
-    for f in info.get("formats", []):
-        ext = f.get("ext", "")
-        height = f.get("height")
-        format_id = f.get("format_id", "")
-        filesize = f.get("filesize") or f.get("filesize_approx")
+    # Audio track that gets merged into video downloads (AAC preferred, like the job selectors)
+    m4a_audio = [f for f in audio_only if f.get("ext") == "m4a"]
+    merge_audio = max(m4a_audio or audio_only, key=lambda f: f.get("abr") or 0, default=None)
+    merge_audio_size = _estimate_size(merge_audio, duration) if merge_audio else 0
 
-        # Only include formats that have both video and audio, or are audio-only
-        has_video = f.get("vcodec", "none") != "none"
-        has_audio = f.get("acodec", "none") != "none"
+    # One choice per resolution. Format ids differ between YouTube clients (and a download may
+    # need a different client than the lookup did), so a choice is "this height", not an id.
+    by_height = {}
+    for f in formats:
+        if _has_video(f) and f.get("height"):
+            by_height.setdefault(f["height"], []).append(f)
 
-        if has_video and has_audio:
-            label = f"{height}p" if height else ext
-            key = f"{label}-{ext}"
-            if key not in seen:
-                seen.add(key)
-                formats.append({
-                    "format_id": format_id,
-                    "ext": ext,
-                    "quality": label,
-                    "height": height or 0,
-                    "filesize": filesize,
-                    "type": "video",
-                })
-        elif has_audio and not has_video:
-            abr = f.get("abr")
-            label = f"{int(abr)}kbps" if abr else "audio"
-            key = f"audio-{label}-{ext}"
-            if key not in seen:
-                seen.add(key)
-                formats.append({
-                    "format_id": format_id,
-                    "ext": ext,
-                    "quality": label,
-                    "height": 0,
-                    "filesize": filesize,
-                    "type": "audio",
-                })
+    videos = []
+    for height, group in by_height.items():
+        # Describe the file this choice will most likely produce
+        picked = _likely_pick(group)
+        fps = picked.get("fps") or 0
+        hdr = (picked.get("dynamic_range") or "SDR") != "SDR"
+        size = _estimate_size(picked, duration)
+        if size and not _has_audio(picked):
+            size += merge_audio_size or 0
+        short_side = min(height, picked.get("width") or height)
+        videos.append({
+            "format_id": f"h{height}",
+            "quality": f"{short_side}p",
+            "note": " · ".join(filter(None, [
+                {2160: "4K", 1440: "2K", 4320: "8K"}.get(short_side, ""),
+                f"{int(fps)}fps" if fps >= 50 else "",
+                "HDR" if hdr else "",
+            ])),
+            "ext": _output_ext(picked, merge_audio),
+            "height": height,
+            "filesize": size,
+            "type": "video",
+        })
+    videos.sort(key=lambda v: -v["height"])
 
-    # Sort: videos by height descending, then audio
-    formats.sort(key=lambda x: (x["type"] == "audio", -x["height"]))
+    best = None
+    if videos:
+        top = videos[0]
+        best = {**top, "format_id": "best", "quality": "Best quality", "note": top["quality"], "height": 99999}
+    elif formats:
+        best = {"format_id": "best", "quality": "Best quality", "note": "", "ext": formats[-1].get("ext") or "",
+                "height": 99999, "filesize": None, "type": "video"}
 
-    # Also offer "best" merged option
-    best_option = {
-        "format_id": "best",
-        "ext": "mp4",
-        "quality": "Best Quality",
-        "height": 9999,
-        "filesize": None,
-        "type": "video",
-    }
+    audios = []
+    if m4a_audio:
+        top = max(m4a_audio, key=lambda f: f.get("abr") or 0)
+        audios.append(_audio_choice("audio", "m4a", "AAC · original", top, duration))
+    opus = [f for f in audio_only if (f.get("acodec") or "").startswith("opus")]
+    if opus:
+        top = max(opus, key=lambda f: f.get("abr") or 0)
+        audios.append(_audio_choice("audio-opus", top.get("ext") or "webm", "Opus · original", top, duration))
+    if not audios and audio_only:
+        top = max(audio_only, key=lambda f: f.get("abr") or 0)
+        audios.append(_audio_choice("audio", top.get("ext") or "", "original", top, duration))
+    # MP3 works everywhere: converted from the best audio (or from the video's sound)
+    if formats:
+        audios.append({
+            "format_id": "audio-mp3",
+            "quality": "MP3",
+            "note": "192 kbps · converted",
+            "ext": "mp3",
+            "height": 0,
+            "filesize": int(192_000 / 8 * duration) if duration else None,
+            "type": "audio",
+        })
 
-    # Get the best thumbnail URL
     thumbnail = info.get("thumbnail")
     if not thumbnail and info.get("thumbnails"):
         thumbnail = info.get("thumbnails")[-1].get("url")
 
     return {
+        "kind": "video",
         "title": info.get("title", ""),
         "thumbnail": thumbnail or "",
-        "duration": info.get("duration", 0) or 0,
+        "duration": duration,
         "uploader": info.get("uploader", ""),
         "webpage_url": url,
-        "formats": [best_option] + formats,
+        "formats": ([best] if best else []) + videos + audios,
     }
 
 
-def download_video(url: str, format_id: str = "best") -> dict:
-    """
-    Download a video to a temporary file and return the file path + metadata.
-    The caller is responsible for deleting the temp file after streaming.
-    """
-    tmp_dir = tempfile.mkdtemp()
+def _has_video(f: dict) -> bool:
+    return (f.get("vcodec") or "none") != "none"
 
-    ydl_opts = {
-        "quiet": True,
-        "no_warnings": True,
-        "outtmpl": os.path.join(tmp_dir, "%(title)s.%(ext)s"),
+
+def _has_audio(f: dict) -> bool:
+    return (f.get("acodec") or "none") != "none"
+
+
+def _likely_pick(group: list) -> dict:
+    """The format the job selector would most likely take at this height: H.264 first, then bitrate."""
+    return max(group, key=lambda f: (
+        (f.get("vcodec") or "").startswith("avc1"),
+        f.get("fps") or 0,
+        f.get("tbr") or 0,
+    ))
+
+
+def _output_ext(video: dict, audio: dict | None) -> str:
+    """mp4 when the streams fit in it, mkv otherwise (the same rule yt-dlp applies when merging)."""
+    if _has_audio(video) or not audio:
+        return video.get("ext") or "mp4"
+    return get_compatible_ext(
+        vcodecs=[video.get("vcodec")],
+        acodecs=[audio.get("acodec")],
+        vexts=[video.get("ext")],
+        aexts=[audio.get("ext")],
+        preferences=("mp4", "mkv"),
+    )
+
+
+def _audio_choice(format_id: str, ext: str, note: str, f: dict, duration: float) -> dict:
+    abr = f.get("abr")
+    return {
+        "format_id": format_id,
+        "quality": f"{int(abr)} kbps" if abr else "Audio",
+        "note": note,
+        "ext": ext,
+        "height": 0,
+        "filesize": _estimate_size(f, duration),
+        "type": "audio",
     }
 
-    if format_id and format_id != "best":
-        ydl_opts["format"] = format_id
-    else:
-        # Best single file if FFmpeg might be missing
-        ydl_opts["format"] = "best[ext=mp4]/best"
 
-    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        log("info", f"Downloading video from URL: {url} with format_id: {format_id}")
-        info = ydl.extract_info(url, download=True)
-        filename = ydl.prepare_filename(info)
+def _estimate_size(f: dict, duration: float):
+    """Exact size when known, otherwise bitrate (kbit/s) x duration."""
+    if not f:
+        return None
+    size = f.get("filesize") or f.get("filesize_approx")
+    if size:
+        return size
+    tbr = f.get("tbr")
+    if tbr and duration:
+        return int(tbr * 1000 / 8 * duration)
+    return None
 
-        # If merged, the extension might change
-        if ydl_opts.get("merge_output_format"):
-            base, _ = os.path.splitext(filename)
-            merged = base + "." + ydl_opts["merge_output_format"]
-            if os.path.exists(merged):
-                filename = merged
+
+def _playlist_info(info: dict, url: str) -> dict:
+    entries = []
+    for entry in info.get("entries") or []:
+        if not entry:
+            continue
+        entry_url = entry.get("url") or entry.get("webpage_url")
+        if not entry_url:
+            continue
+        # Flat YouTube entries carry the id rather than a full watch link
+        if not entry_url.startswith("http") and entry.get("ie_key") == "Youtube":
+            entry_url = f"https://www.youtube.com/watch?v={entry_url}"
+        thumbnails = entry.get("thumbnails") or []
+        entries.append({
+            "id": entry.get("id") or entry_url,
+            "url": entry_url,
+            "title": entry.get("title") or entry_url,
+            "duration": entry.get("duration") or 0,
+            "thumbnail": entry.get("thumbnail")
+            or (thumbnails[-1].get("url") if thumbnails else ""),
+            "uploader": entry.get("uploader") or entry.get("channel") or "",
+        })
+
+    thumbnails = info.get("thumbnails") or []
+    thumbnail = info.get("thumbnail") or (thumbnails[-1].get("url") if thumbnails else "")
+    if not thumbnail and entries:
+        thumbnail = entries[0]["thumbnail"]
 
     return {
-        "filepath": filename,
-        "title": info.get("title", "video"),
-        "ext": os.path.splitext(filename)[1].lstrip("."),
+        "kind": "playlist",
+        "title": info.get("title") or "Playlist",
+        "thumbnail": thumbnail,
+        "uploader": info.get("uploader") or info.get("channel") or "",
+        "webpage_url": url,
+        "entries": entries,
     }

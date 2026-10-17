@@ -73,3 +73,6 @@ venv.bak/
 **/.venv/
 **/env/
 **/ENV/
+
+# --- YT-DLP COOKIES ---
+cookies.txt
