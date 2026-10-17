@@ -4,7 +4,8 @@ services:
     build: .
     image: video-grabber
     ports:
-      - 8000:8000
+      # 7845 is rarely taken by other tools; change the left side to use another port
+      - 7845:7845
     env_file:
       - path: ./backend/.env
         required: false

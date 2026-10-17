@@ -30,12 +30,17 @@ and watch every download come in live on its own TV.
 One container, one port. The image already has the frontend, the API, yt-dlp, FFmpeg and Deno.
 
 ```bash
-docker run -d --name video-grabber -p 8000:8000 \
+docker run -d --name video-grabber -p 7845:7845 \
   -v video-grabber-data:/data \
   sami999/video-grabber:latest
 ```
 
-Open **http://localhost:8000**, paste a link, hit **Tune in**, pick what you want and **Grab**.
+Open **http://localhost:7845**, paste a link, hit **Tune in**, pick what you want and **Grab**.
+
+> [!TIP]
+> **7845** is used because almost nothing else claims it, unlike 8000, 8080 or 3000. To use
+> another port, change the left side only: `-p 8080:7845` serves the app on
+> http://localhost:8080 (and set the same address in the extension's settings).
 
 <details>
 <summary><b>Docker Compose</b></summary>
@@ -45,7 +50,7 @@ services:
   video-grabber:
     image: sami999/video-grabber:latest
     ports:
-      - "8000:8000"
+      - "7845:7845"
     environment:
       MAX_PARALLEL_DOWNLOADS: 3
     volumes:
@@ -107,11 +112,26 @@ your server: its popup lists every quality for the current tab, queues downloads
 progress live. A right-click menu, a badge counting active downloads, notifications and auto-save
 to your Downloads folder come with it.
 
-<p align="center">
-  <img src="docs/screenshots/extension-playlist.png" alt="Extension popup on a playlist" width="300">
-  &nbsp;
-  <img src="docs/screenshots/extension-live.png" alt="Extension popup with downloads in progress" width="300">
-</p>
+<table>
+  <tr>
+    <td align="center" width="33%"><img src="docs/screenshots/extension-video.png" alt="Popup on a video: every quality from 4K down, plus audio" width="260"></td>
+    <td align="center" width="33%"><img src="docs/screenshots/extension-playlist.png" alt="Popup on a playlist: one quality for all, pick the videos" width="260"></td>
+    <td align="center" width="33%"><img src="docs/screenshots/extension-live.png" alt="Popup with downloads coming in live" width="260"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Any quality</b><br><sub>reads the tab you're on</sub></td>
+    <td align="center"><b>Playlists</b><br><sub>one quality, Grab ×N</sub></td>
+    <td align="center"><b>Live progress</b><br><sub>2 per site, the rest on standby</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/extension-offline.png" alt="Popup when the server is off: how to start it, reconnects by itself" width="260"></td>
+    <td align="center" colspan="2"><img src="docs/screenshots/extension-settings.png" alt="Extension settings: server address with quick picks for common ports" width="520"></td>
+  </tr>
+  <tr>
+    <td align="center"><b>Server off</b><br><sub>start command, reconnects by itself</sub></td>
+    <td align="center" colspan="2"><b>Settings</b><br><sub>server address, quick picks for common ports</sub></td>
+  </tr>
+</table>
 
 **Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → **Load unpacked** → pick
 `extension/release/chrome`. **Firefox:** `about:debugging` → **Load Temporary Add-on** → pick
@@ -214,13 +234,13 @@ Base URL `/api`, JSON bodies.
 <summary><b>Example: queue a 1080p download and an MP3 from the command line</b></summary>
 
 ```bash
-curl -X POST http://localhost:8000/api/jobs/ -H 'Content-Type: application/json' -d '{
+curl -X POST http://localhost:7845/api/jobs/ -H 'Content-Type: application/json' -d '{
   "items": [
     { "url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ", "format_id": "h1080" },
     { "url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ", "format_id": "audio-mp3" }
   ]
 }'
-curl -N http://localhost:8000/api/jobs/stream/   # watch them come in
+curl -N http://localhost:7845/api/jobs/stream/   # watch them come in
 ```
 
 </details>

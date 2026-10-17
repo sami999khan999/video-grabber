@@ -5,8 +5,13 @@ toolbar button, pick a quality (or audio only) and **Grab**; the popup shows eve
 progress live. Works in Chrome, Edge, Brave, Opera and Firefox.
 
 <p>
-  <img src="../docs/screenshots/extension-playlist.png" alt="Popup on a playlist: quality presets and the videos to grab" width="300">
-  <img src="../docs/screenshots/extension-live.png" alt="Popup with downloads in progress" width="300">
+  <img src="../docs/screenshots/extension-video.png" alt="Popup on a video: every quality from 4K down, plus audio" width="250">
+  <img src="../docs/screenshots/extension-playlist.png" alt="Popup on a playlist: one quality for all" width="250">
+  <img src="../docs/screenshots/extension-live.png" alt="Popup with downloads in progress" width="250">
+</p>
+<p>
+  <img src="../docs/screenshots/extension-offline.png" alt="Popup when the server is off" width="250">
+  <img src="../docs/screenshots/extension-settings.png" alt="Settings: server address and quick picks for common ports" width="506">
 </p>
 
 ## What it does
@@ -27,7 +32,7 @@ streams and signed URLs are handled the same way as in the web app.
 You need a running server first:
 
 ```bash
-docker run -d -p 8000:8000 -v video-grabber-data:/data sami999/video-grabber
+docker run -d -p 7845:7845 -v video-grabber-data:/data sami999/video-grabber
 ```
 
 ### Chrome, Edge, Brave, Opera
@@ -54,7 +59,7 @@ Right-click the toolbar button → **Options** (or the gear in the popup):
 
 | Setting | Default | |
 |---|---|---|
-| Server address | `http://localhost:8000` | Any address works, e.g. `http://192.168.1.20:8000`; the browser asks once for permission |
+| Server address | `http://localhost:7845` | Quick picks for 7845, 8080, 8000 and 8888; any address works, e.g. `http://192.168.1.20:7845` (the browser asks once for permission) |
 | Save files when done | on | Sends finished downloads to your Downloads folder |
 | Notifications | on | Queued / ready / failed |
 

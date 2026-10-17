@@ -1,4 +1,4 @@
-# One image: Next.js frontend (static export) + Django API, served together on port 8000.
+# One image: Next.js frontend (static export) + Django API, served together on port 7845.
 
 # --- 1. Build the frontend -------------------------------------------------
 FROM node:22-alpine AS frontend
@@ -31,7 +31,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     DATA_DIR=/data \
     MAX_PARALLEL_DOWNLOADS=3 \
     JOB_TTL_HOURS=6 \
-    PORT=8000
+    PORT=7845
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
@@ -52,7 +52,7 @@ RUN useradd --create-home --uid 1000 app \
     && chown -R app:app /app/logs /downloads /data
 USER app
 
-EXPOSE 8000
+EXPOSE 7845
 
 # Jobs are kept in memory, so there is exactly one process; threads serve the
 # requests and the live progress streams (one per open tab), downloads run in their own pool.

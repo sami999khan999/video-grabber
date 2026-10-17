@@ -7,9 +7,27 @@ const show = (ok, text) => {
   $("result").replaceChildren(box);
 };
 
+// The start command follows the address typed in
+const showCommand = () => {
+  try {
+    $("run-command").textContent = VG.runCommand(VG.normalizeServer($("server").value));
+  } catch {
+    $("run-command").textContent = VG.runCommand(VG.DEFAULTS.server);
+  }
+};
+
+$("server").addEventListener("input", showCommand);
+for (const chip of document.querySelectorAll("[data-server]")) {
+  chip.addEventListener("click", () => {
+    $("server").value = chip.dataset.server;
+    showCommand();
+  });
+}
+
 async function load() {
   const settings = await VG.getSettings();
   $("server").value = settings.server;
+  showCommand();
   $("autoSave").checked = settings.autoSave;
   $("notify").checked = settings.notify;
 }

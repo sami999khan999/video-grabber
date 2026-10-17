@@ -139,7 +139,7 @@ function renderOffline() {
       h("p", { class: "meta" }, `Nothing answers at ${state.server}. Start the container and this popup reconnects by itself.`),
       h("pre", {}, "docker compose up -d"),
       h("p", { class: "meta" }, "in the project folder, or:"),
-      h("pre", {}, "docker run -d -p 8000:8000 -v video-grabber-data:/data sami999/video-grabber"),
+      h("pre", {}, VG.runCommand(state.server)),
       h(
         "div",
         { class: "offline-actions" },

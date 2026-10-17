@@ -394,7 +394,7 @@ main {
   font-size: 11px;
   text-align: left;
   white-space: pre-wrap;
-  word-break: break-all;
+  overflow-wrap: anywhere;
 }
 
 .offline-actions {

@@ -4,7 +4,7 @@
 /* eslint-disable no-unused-vars */
 var VG = (() => {
   const DEFAULTS = {
-    server: "http://localhost:8000",
+    server: "http://localhost:7845",
     autoSave: true,
     notify: true,
   };
@@ -91,7 +91,14 @@ var VG = (() => {
     { id: "audio-mp3", label: "MP3" },
   ];
 
+  // The command that starts a server for the given address (host port = the one in the address)
+  const runCommand = (server) => {
+    const port = new URL(server).port || "7845";
+    return `docker run -d -p ${port}:7845 -v video-grabber-data:/data sami999/video-grabber`;
+  };
+
   return {
+    runCommand,
     DEFAULTS, getSettings, normalizeServer, hasAccess, requestAccess, api,
     isActive, byPriority, formatBytes, formatDuration, PRESETS,
   };

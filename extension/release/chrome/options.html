@@ -32,7 +32,7 @@
         color: #f4f1e8;
         font-size: 12px;
         white-space: pre-wrap;
-        word-break: break-all;
+        overflow-wrap: anywhere;
       }
       h1 {
         margin: 0 0 4px;
@@ -80,6 +80,19 @@
         background: rgba(182, 244, 0, 0.1);
         color: #e4ff9e;
       }
+      .ports {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
+        margin-top: 10px;
+      }
+      .ports .chip {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 5px;
+        padding: 4px 10px;
+      }
       code {
         padding: 1px 5px;
         border-radius: 5px;
@@ -96,14 +109,23 @@
       <form id="form">
         <label class="field" for="server">Server address</label>
         <div class="row">
-          <input id="server" type="url" required placeholder="http://localhost:8000" />
+          <input id="server" type="url" required placeholder="http://localhost:7845" />
           <button type="button" id="test" class="btn small">Test</button>
         </div>
+        <div class="ports" aria-label="Quick picks">
+          <span class="meta">Quick picks:</span>
+          <button type="button" class="chip" data-server="http://localhost:7845">:7845 <small>default</small></button>
+          <button type="button" class="chip" data-server="http://localhost:8080">:8080</button>
+          <button type="button" class="chip" data-server="http://localhost:8000">:8000</button>
+          <button type="button" class="chip" data-server="http://localhost:8888">:8888</button>
+        </div>
         <p class="meta">
-          Where the container listens, e.g. <code>http://localhost:8000</code> or
-          <code>http://192.168.1.20:8000</code>. Don't have one running? Start it with:
+          Where the container listens. The default <code>7845</code> is rarely used by other
+          software; <code>8080</code>, <code>8000</code> and <code>8888</code> are common choices but
+          often taken by other dev tools. Another computer works too, e.g.
+          <code>http://192.168.1.20:7845</code>. Don't have one running? Start it with:
         </p>
-        <pre>docker run -d -p 8000:8000 -v video-grabber-data:/data sami999/video-grabber</pre>
+        <pre id="run-command"></pre>
 
         <label class="toggle"><input id="autoSave" type="checkbox" /> Save files to Downloads as soon as they finish</label>
         <label class="toggle"><input id="notify" type="checkbox" /> Show a notification when a download is queued, done or fails</label>
