@@ -1,11 +1,30 @@
 const $ = (id) => document.getElementById(id);
 
+// Results appear next to the button that was pressed, so there's no scrolling to find them
 const show = (ok, text) => {
   const box = document.createElement("div");
   box.className = ok ? "ok" : "error";
   box.textContent = text;
-  $("result").replaceChildren(box);
+  $("server-result").replaceChildren(box);
 };
+
+const showSaved = (ok, text) => {
+  $("save-result").className = ok ? "ok-text" : "bad-text";
+  $("save-result").textContent = text;
+};
+
+/** Busy state on a button while something runs; its label comes back afterwards. */
+async function busy(button, label, work) {
+  const original = button.textContent;
+  button.disabled = true;
+  button.textContent = label;
+  try {
+    return await work();
+  } finally {
+    button.disabled = false;
+    button.textContent = original;
+  }
+}
 
 // The start command follows the address typed in
 const showCommand = () => {
@@ -48,25 +67,34 @@ async function test(server) {
   return `Connected: ${status.max_parallel} downloads at a time, ${status.cookies ? "cookies on" : "no cookies"}.`;
 }
 
-$("test").addEventListener("click", async () => {
-  try {
-    show(true, await test(VG.normalizeServer($("server").value)));
-  } catch (err) {
-    show(false, err.message);
-  }
-});
+$("test").addEventListener("click", (e) =>
+  busy(e.currentTarget, "Testing…", async () => {
+    $("server-result").replaceChildren();
+    try {
+      show(true, await test(VG.normalizeServer($("server").value)));
+    } catch (err) {
+      show(false, err.message);
+    }
+  }),
+);
 
-$("form").addEventListener("submit", async (e) => {
+$("form").addEventListener("submit", (e) => {
   e.preventDefault();
-  try {
-    const server = VG.normalizeServer($("server").value);
-    const message = await test(server);
-    await chrome.storage.local.set({ server, autoSave: $("autoSave").checked, notify: $("notify").checked });
-    $("server").value = server;
-    show(true, `Saved. ${message}`);
-  } catch (err) {
-    show(false, err.message);
-  }
+  const button = e.submitter || e.currentTarget.querySelector('[type="submit"]');
+  return busy(button, "Saving…", async () => {
+    showSaved(true, "");
+    try {
+      const server = VG.normalizeServer($("server").value);
+      const message = await test(server);
+      await chrome.storage.local.set({ server, autoSave: $("autoSave").checked, notify: $("notify").checked });
+      $("server").value = server;
+      showSaved(true, "✓ Saved");
+      show(true, message);
+    } catch (err) {
+      showSaved(false, "Not saved");
+      show(false, err.message);
+    }
+  });
 });
 
 // --- any website -------------------------------------------------------------------
@@ -142,7 +170,7 @@ async function syncNow() {
   return result.ok;
 }
 
-$("yt-sync").addEventListener("click", syncNow);
+$("yt-sync").addEventListener("click", (e) => busy(e.currentTarget, "Sending…", syncNow));
 
 $("syncYouTube").addEventListener("change", async (e) => {
   if (!e.target.checked) {
