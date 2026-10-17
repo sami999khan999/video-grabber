@@ -1,8 +1,10 @@
+import json
 import os
 import re
 import shutil
 import tempfile
 import threading
+import time
 
 import yt_dlp
 from yt_dlp.utils import DownloadCancelled
@@ -12,6 +14,9 @@ from yt_dlp.utils import DownloadCancelled
 # page (saved in DATA_DIR) or mounted and pointed to with COOKIES_FILE; an upload wins.
 DATA_DIR = os.environ.get("DATA_DIR") or os.path.join(tempfile.gettempdir(), "video-grabber-data")
 UPLOADED_COOKIES = os.path.join(DATA_DIR, "cookies.txt")
+# Where the stored cookies came from ("file" upload or the browser "extension"), when, how many
+UPLOADED_COOKIES_META = os.path.join(DATA_DIR, "cookies.json")
+COOKIE_ORIGINS = {"file", "extension"}
 COOKIES_FILE = os.environ.get("COOKIES_FILE", "")
 
 MAX_COOKIES_BYTES = 1024 * 1024
@@ -70,8 +75,8 @@ def parse_cookie_text(content: bytes):
     return text, len(cookie_lines)
 
 
-def save_uploaded_cookies(content: bytes):
-    """Check that it looks like a Netscape cookies.txt and store it."""
+def save_uploaded_cookies(content: bytes, origin: str = "file"):
+    """Check that it looks like a Netscape cookies.txt and store it (uploaded, or synced by the extension)."""
     text, count = parse_cookie_text(content)
     os.makedirs(DATA_DIR, exist_ok=True)
     tmp = UPLOADED_COOKIES + ".tmp"
@@ -79,15 +84,36 @@ def save_uploaded_cookies(content: bytes):
         f.write(text if text.endswith("\n") else text + "\n")
     os.chmod(tmp, 0o600)
     os.replace(tmp, UPLOADED_COOKIES)
+    with open(UPLOADED_COOKIES_META, "w", encoding="utf-8") as f:
+        json.dump({
+            "origin": origin if origin in COOKIE_ORIGINS else "file",
+            "updated_at": time.time(),
+            "count": count,
+        }, f)
     return count
 
 
-def delete_uploaded_cookies():
+def cookies_detail():
+    """Where the uploaded cookies came from and when; None when there are none."""
+    if not os.path.isfile(UPLOADED_COOKIES):
+        return None
     try:
-        os.remove(UPLOADED_COOKIES)
-        return True
-    except FileNotFoundError:
-        return False
+        with open(UPLOADED_COOKIES_META, encoding="utf-8") as f:
+            return json.load(f)
+    except (OSError, ValueError):
+        # Uploaded before this was recorded
+        return {"origin": "file", "updated_at": os.path.getmtime(UPLOADED_COOKIES), "count": None}
+
+
+def delete_uploaded_cookies():
+    removed = False
+    for path in (UPLOADED_COOKIES, UPLOADED_COOKIES_META):
+        try:
+            os.remove(path)
+            removed = True
+        except FileNotFoundError:
+            pass
+    return removed
 
 
 # YouTube wants a signed-in user for these; cookies can help

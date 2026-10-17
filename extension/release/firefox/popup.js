@@ -218,6 +218,23 @@ async function tune(url, { media = null, pageTune = false } = {}) {
   updateGrab();
 }
 
+/** Fix YouTube's bot check: send this browser's login to the server, then try the link again. */
+async function sendYouTubeLogin(button) {
+  if (!(await VG.hasYouTube())) {
+    // The permission prompt needs a full page; Settings has the button for it
+    chrome.tabs.create({ url: chrome.runtime.getURL("options.html#youtube") });
+    return;
+  }
+  button.disabled = true;
+  button.textContent = "Sending…";
+  const result = await chrome.runtime.sendMessage({ type: "sync-youtube" });
+  if (!result.ok) {
+    renderSource({ error: result.error });
+    return;
+  }
+  if (state.lastUrl) tune(state.lastUrl, { pageTune: state.lastUrl === state.tabUrl });
+}
+
 /** What to try when the page itself isn't supported. */
 function detectHint() {
   if (state.detected.length) return "This page's own link didn't work, but the video it plays is listed below. Grab it from there.";
@@ -295,7 +312,8 @@ function renderSource({ loading, error, hint, settings, placeholder, source }) {
     box.append(
       ...[
         h("div", { class: "error" }, error),
-        cookies && h("p", { class: "meta" }, "Upload YouTube cookies in the station (Cookies tab), then try again."),
+        cookies && h("p", { class: "meta" }, "The server needs your YouTube login. The extension can send it from this browser:"),
+        cookies && h("button", { class: "btn small yellow", onclick: (e) => sendYouTubeLogin(e.currentTarget) }, "Send my YouTube login"),
         hint && h("p", { class: "meta" }, hint),
         settings && h("button", { class: "btn small yellow", onclick: () => chrome.runtime.openOptionsPage() }, "Open Settings"),
       ].filter(Boolean),

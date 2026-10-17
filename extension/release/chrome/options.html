@@ -140,6 +140,29 @@
       </form>
     </div>
 
+    <div class="card" id="youtube">
+      <span class="sticker pink">YouTube login</span>
+      <p class="meta">
+        When YouTube asks the server to <b>"sign in to confirm you're not a bot"</b>, the server
+        needs your YouTube login. The extension can hand it over straight from this browser, no
+        cookies.txt export needed. Only youtube.com cookies are read, and the server only uses them
+        when YouTube insists. A spare account is safest.
+      </p>
+      <p id="yt-status" class="meta"></p>
+      <div class="row" style="align-items: center">
+        <button type="button" id="yt-sync" class="btn yellow">Send my YouTube login now</button>
+      </div>
+      <label class="toggle"><input id="syncYouTube" type="checkbox" /> Keep it up to date automatically</label>
+      <p class="meta hint">
+        Sends the login again every 6 hours, and a minute after you log in or out of YouTube.
+      </p>
+      <p class="meta">
+        Prefer doing it by hand? Upload a cookies.txt in the station's <b>Cookies</b> tab instead;
+        both end up in the same place on the server.
+      </p>
+      <div id="yt-result" aria-live="polite"></div>
+    </div>
+
     <div class="card">
       <span class="sticker lime">Any website</span>
       <p class="meta">

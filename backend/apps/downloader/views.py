@@ -13,6 +13,7 @@ from .politeness import PER_SITE_PARALLEL, POLITE_MODE
 from .services import extract_video_info
 from .ytdlp import (
     clean_headers,
+    cookies_detail,
     cookies_source,
     delete_uploaded_cookies,
     parse_cookie_text,
@@ -39,14 +40,17 @@ class StatusView(APIView):
             "max_parallel": MAX_PARALLEL_DOWNLOADS,
             "polite": POLITE_MODE,
             "per_site_parallel": PER_SITE_PARALLEL if POLITE_MODE else None,
-            # "upload" (added from the page), "file" (COOKIES_FILE) or null
+            # "upload" (added from the page or the extension), "file" (COOKIES_FILE) or null
             "cookies": cookies_source(),
+            # For uploaded cookies: { origin: "file" | "extension", updated_at, count }
+            "cookies_detail": cookies_detail(),
         })
 
 
 class CookiesView(APIView):
     """
-    POST   /api/cookies/  -> store a Netscape cookies.txt (multipart "file", or JSON "content")
+    POST   /api/cookies/  -> store a Netscape cookies.txt (multipart "file", or JSON "content";
+                             "origin": "extension" when the browser extension syncs a login)
     DELETE /api/cookies/  -> forget the uploaded cookies
     """
 
@@ -59,10 +63,13 @@ class CookiesView(APIView):
         if not content:
             return Response({"error": "Send a cookies.txt file."}, status=status.HTTP_400_BAD_REQUEST)
         try:
-            count = save_uploaded_cookies(content)
+            count = save_uploaded_cookies(content, origin=request.data.get("origin") or "file")
         except ValueError as e:
             return Response({"error": str(e)}, status=status.HTTP_400_BAD_REQUEST)
-        return Response({"cookies": cookies_source(), "count": count}, status=status.HTTP_201_CREATED)
+        return Response(
+            {"cookies": cookies_source(), "count": count, "cookies_detail": cookies_detail()},
+            status=status.HTTP_201_CREATED,
+        )
 
     def delete(self, request):
         delete_uploaded_cookies()

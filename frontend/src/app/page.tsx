@@ -235,7 +235,7 @@ export default function Home() {
               />
             )}
             {view === "auth" && (
-              <CookiesPanel cookies={status?.cookies} onChanged={() => queryClient.invalidateQueries({ queryKey: ["status"] })} />
+              <CookiesPanel cookies={status?.cookies} detail={status?.cookies_detail} onChanged={() => queryClient.invalidateQueries({ queryKey: ["status"] })} />
             )}
           </div>
         </aside>

@@ -6,11 +6,20 @@ import { StationStatus, videoApi } from "@/lib/api";
 
 interface CookiesPanelProps {
   cookies: StationStatus["cookies"] | undefined;
+  detail: StationStatus["cookies_detail"] | undefined;
   onChanged: () => void;
 }
 
+const ago = (seconds: number) => {
+  const minutes = Math.round((Date.now() / 1000 - seconds) / 60);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
+};
+
 /** Explains the "confirm you're not a bot" block and takes a cookies.txt upload. */
-export function CookiesPanel({ cookies, onChanged }: CookiesPanelProps) {
+export function CookiesPanel({ cookies, detail, onChanged }: CookiesPanelProps) {
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState<{ ok: boolean; text: string } | null>(null);
@@ -51,12 +60,55 @@ export function CookiesPanel({ cookies, onChanged }: CookiesPanelProps) {
         <h2 className="pp-gold mt-3 text-3xl sm:text-4xl">YouTube cookies</h2>
       </div>
 
-      <div className="flex items-center gap-3">
-        <span
-          className={`pp-sticker !rotate-0 ${cookies ? "is-lime" : "is-dark"}`}
-        >
-          {cookies === "upload" ? "Uploaded cookies in use" : cookies === "file" ? "Mounted cookies file in use" : "No cookies"}
+      <div className="flex flex-wrap items-center gap-3">
+        <span className={`pp-sticker !rotate-0 ${cookies ? "is-lime" : "is-dark"}`}>
+          {detail?.origin === "extension"
+            ? "Synced from your browser"
+            : cookies === "upload"
+              ? "Uploaded cookies in use"
+              : cookies === "file"
+                ? "Mounted cookies file in use"
+                : "No cookies"}
         </span>
+        {detail && (
+          <span className="text-[12px] font-semibold text-[var(--muted)]">
+            {detail.origin === "extension" ? "sent by the extension" : "uploaded"} {ago(detail.updated_at)}
+            {detail.count ? ` · ${detail.count} cookies` : ""}
+          </span>
+        )}
+      </div>
+
+      <p className="text-[14px] font-medium leading-relaxed text-[#c9d2dc]">
+        YouTube sometimes refuses servers with <b className="text-white">&quot;Sign in to confirm you&apos;re not a bot&quot;</b>.
+        That&apos;s about this machine&apos;s IP address (lots of requests, a VPN, or a data center), not
+        the link. Your YouTube login gets past it; the server only uses it when YouTube insists.
+      </p>
+
+      <div className="rounded-2xl border-[2.5px] border-[var(--ink)] bg-[var(--lime)]/10 p-4 shadow-[inset_0_0_0_1.5px_rgba(182,244,0,0.25)]">
+        <div className="flex items-center gap-2">
+          <span className="pp-sticker is-lime !text-[10px]">Automatic</span>
+          <span className="text-[13px] font-black">with the browser extension</span>
+        </div>
+        <ol className="mt-3 space-y-2 text-[13px] font-semibold">
+          {[
+            "Install the Video Grabber extension (extension/release in the project).",
+            "Open its Settings → YouTube login → Send my YouTube login now.",
+            "Switch on \"Keep it up to date automatically\" and forget about it.",
+          ].map((text, i) => (
+            <li key={i} className="flex items-start gap-3">
+              <span className="pp-badge h-6 w-6 shrink-0 text-[12px]">{i + 1}</span>
+              <span className="pt-0.5">{text}</span>
+            </li>
+          ))}
+        </ol>
+        <p className="mt-2 text-[12px] font-semibold text-[var(--muted)]">
+          Only youtube.com cookies are read. The popup also offers it in one click when YouTube blocks a link.
+        </p>
+      </div>
+
+      <div>
+        <span className="pp-sticker is-dark !text-[10px]">Manual</span>
+        <span className="ml-2 text-[13px] font-black">upload a cookies.txt</span>
       </div>
 
       <div className="flex flex-wrap gap-3">
@@ -76,7 +128,7 @@ export function CookiesPanel({ cookies, onChanged }: CookiesPanelProps) {
           Upload cookies.txt
         </button>
         {cookies === "upload" && (
-          <button className="pp-btn" disabled={busy} onClick={remove}>
+          <button className="pp-btn" disabled={busy} onClick={remove} title="Forget the stored cookies (from the extension or an upload)">
             <Trash2 size={15} strokeWidth={2.75} /> Remove
           </button>
         )}
@@ -92,12 +144,6 @@ export function CookiesPanel({ cookies, onChanged }: CookiesPanelProps) {
           {message.text}
         </p>
       )}
-
-      <p className="text-[14px] font-medium leading-relaxed text-[#c9d2dc]">
-        YouTube sometimes refuses servers with <b className="text-white">&quot;Sign in to confirm you&apos;re not a bot&quot;</b>.
-        That&apos;s about this machine&apos;s IP address (lots of requests, a VPN, or a data center), not
-        the link. Cookies from a browser that is logged in to YouTube get past it.
-      </p>
 
       <ol className="space-y-2.5 text-[13px] font-semibold">
         {[

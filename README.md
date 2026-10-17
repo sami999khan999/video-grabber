@@ -78,7 +78,7 @@ docker compose up -d
 | 🔀 **Parallel downloads** | A worker pool runs several at once (3 by default); the rest wait on standby. Cancel, retry or remove any of them |
 | 💾 **Straight to disk** | Finished files go to the browser's own download manager (auto-save is optional); nothing is held in browser memory |
 | 🌐 **Almost any site** | ~1,800 sites by name through yt-dlp; with the extension, also the video a page is playing on any other site (MP4, HLS, DASH), fetched with that page's headers and, if you allow it, your login for that site |
-| 🍪 **YouTube-proof** | Upload a `cookies.txt` from the page when YouTube says *"confirm you're not a bot"*; cookies are only used when the site insists, so they never cost you quality |
+| 🍪 **YouTube-proof** | When YouTube says *"confirm you're not a bot"*, the extension hands your YouTube login to the server (once or automatically), or you upload a `cookies.txt`; it's only used when the site insists, so it never costs you quality |
 | 📱 **Works on phones** | The whole station folds down to a single column |
 
 ## 🖼️ Screenshots
@@ -205,11 +205,25 @@ will never block you, but this keeps the traffic looking like a person rather th
 ## 🍪 YouTube says "Sign in to confirm you're not a bot"
 
 YouTube says that to IP addresses it distrusts: servers, VPNs, or lots of requests in a short time.
-It's about the address, not the link, and it often lifts after a while. To get past it:
+It's about the address, not the link, and it often lifts after a while. The server gets past it
+with your YouTube login (and only uses it when YouTube insists). Two ways to give it one:
+
+**Automatic, with the [browser extension](extension/)** (recommended)
 
 1. Log in to YouTube in your browser (a spare account is safest).
-2. Export the cookies as `cookies.txt` with an extension such as **Get cookies.txt LOCALLY**.
-3. In the app, open **Cookies** and upload the file. The top bar shows **Cookies on**.
+2. Extension **Settings → YouTube login → Send my YouTube login now**. Only youtube.com cookies
+   are read.
+3. Switch on **Keep it up to date automatically**: it re-sends the login every 6 hours and a
+   minute after you log in or out. The popup also offers a one-click **Send my YouTube login**
+   when YouTube blocks a link.
+
+**Manual**
+
+1. Export your youtube.com cookies as `cookies.txt` with an extension such as
+   **Get cookies.txt LOCALLY**.
+2. In the app, open **Cookies** and upload the file.
+
+Either way the top bar shows **Cookies on**, and the Cookies tab says where they came from and when.
 
 > [!WARNING]
 > The app has no login. Anyone who can open the page can queue downloads and use the account
@@ -232,7 +246,7 @@ Base URL `/api`, JSON bodies.
 | `DELETE` | `/jobs/:id/` | | Cancels if needed, removes the job and its file |
 | `POST` | `/jobs/clear/` | | Removes finished, failed and cancelled jobs |
 | `GET` | `/jobs/:id/file/` | | The finished file |
-| `POST` / `DELETE` | `/cookies/` | multipart `file` | Stores / forgets an uploaded `cookies.txt` |
+| `POST` / `DELETE` | `/cookies/` | multipart `file`, or `{ content, origin? }` | Stores / forgets the server's `cookies.txt` (`origin: "extension"` when the extension syncs a login) |
 
 `headers` (only `Referer`, `Origin`, `User-Agent`) and `cookies` (the text of a cookies.txt) are
 optional and also accepted by `/info/`; the extension uses them for videos found on a page. The

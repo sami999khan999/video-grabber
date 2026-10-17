@@ -248,3 +248,43 @@ chrome.tabs.onUpdated.addListener((tabId, change) => {
   // A new page in the tab: what the old one played no longer applies
   if (change.url) forgetTab(tabId);
 });
+
+// --- YouTube login sync ----------------------------------------------------------------
+// With "Keep it up to date" on, the server's YouTube cookies follow this browser's login:
+// every 6 hours, and shortly after YouTube changes a login cookie.
+
+const SYNC_ALARM = "sync-youtube";
+const SYNC_SOON_ALARM = "sync-youtube-soon";
+
+async function scheduleYouTubeSync() {
+  const { syncYouTube } = await VG.getSettings();
+  if (syncYouTube) chrome.alarms.create(SYNC_ALARM, { periodInMinutes: 360 });
+  else {
+    chrome.alarms.clear(SYNC_ALARM);
+    chrome.alarms.clear(SYNC_SOON_ALARM);
+  }
+}
+
+chrome.runtime.onStartup.addListener(scheduleYouTubeSync);
+chrome.runtime.onInstalled.addListener(scheduleYouTubeSync);
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === "local" && changes.syncYouTube) scheduleYouTubeSync();
+});
+
+chrome.alarms.onAlarm.addListener(async (alarm) => {
+  if (alarm.name !== SYNC_ALARM && alarm.name !== SYNC_SOON_ALARM) return;
+  if ((await VG.getSettings()).syncYouTube) await VG.syncYouTubeLogin();
+});
+
+chrome.cookies.onChanged.addListener(async ({ cookie }) => {
+  if (!cookie.domain.endsWith("youtube.com") || !VG.YOUTUBE_LOGIN_COOKIES.includes(cookie.name)) return;
+  if (!(await VG.getSettings()).syncYouTube) return;
+  // Logging in or out changes several cookies at once: sync once, a minute later
+  chrome.alarms.create(SYNC_SOON_ALARM, { delayInMinutes: 1 });
+});
+
+chrome.runtime.onMessage.addListener((message, _sender, reply) => {
+  if (message.type !== "sync-youtube") return false;
+  VG.syncYouTubeLogin().then(reply);
+  return true;
+});

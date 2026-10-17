@@ -73,8 +73,8 @@ def clean_error(exc: Exception) -> str:
     if re.search(r"confirm you.re not a bot|Sign in to confirm", message):
         return (
             "YouTube is blocking this server and wants a signed-in user "
-            "(\"confirm you're not a bot\"). Upload cookies.txt from a browser that is "
-            "logged in to YouTube, then try again."
+            "(\"confirm you're not a bot\"). Send your YouTube login with the browser "
+            "extension, or upload a cookies.txt in the Cookies tab, then try again."
         )
     message = re.sub(r"^ERROR:\s*", "", message)
     if message.startswith("Unsupported URL"):

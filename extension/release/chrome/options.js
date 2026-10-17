@@ -105,5 +105,65 @@ async function loadAny() {
   $("sendCookies").checked = (await VG.getSettings()).sendCookies;
 }
 
+// --- YouTube login ------------------------------------------------------------------
+
+const showYouTube = (ok, text) => {
+  const box = document.createElement("div");
+  box.className = ok ? "ok" : "error";
+  box.textContent = text;
+  $("yt-result").replaceChildren(box);
+};
+
+async function showYouTubeStatus() {
+  const { lastYouTubeSync: last } = await chrome.storage.local.get("lastYouTubeSync");
+  let server = null;
+  try {
+    server = (await VG.api("/status/")).cookies_detail;
+  } catch {
+    // Server off: say what the extension knows
+  }
+  const parts = [];
+  if (server?.origin === "extension") parts.push(`Server has your login from this extension, sent ${VG.timeAgo(server.updated_at * 1000)}.`);
+  else if (server?.origin === "file") parts.push(`Server has an uploaded cookies.txt from ${VG.timeAgo(server.updated_at * 1000)}.`);
+  else if (server === null) parts.push("Server has no YouTube login yet.");
+  if (last && !last.ok) parts.push(`Last try ${VG.timeAgo(last.at)} failed: ${last.error}`);
+  $("yt-status").textContent = parts.join(" ");
+}
+
+/** Ask for YouTube access (needs the click), then send the login. */
+async function syncNow() {
+  if (!(await VG.hasYouTube()) && !(await VG.requestYouTube())) {
+    showYouTube(false, "The browser wasn't allowed to read YouTube's cookies, so nothing was sent.");
+    return false;
+  }
+  const result = await chrome.runtime.sendMessage({ type: "sync-youtube" });
+  showYouTube(result.ok, result.ok ? `Sent ${result.count} YouTube cookies to the server.` : result.error);
+  showYouTubeStatus();
+  return result.ok;
+}
+
+$("yt-sync").addEventListener("click", syncNow);
+
+$("syncYouTube").addEventListener("change", async (e) => {
+  if (!e.target.checked) {
+    await chrome.storage.local.set({ syncYouTube: false });
+    showYouTube(true, "Automatic sync is off. The login already on the server stays until you remove it in the station.");
+    return;
+  }
+  if (!(await VG.hasYouTube()) && !(await VG.requestYouTube())) {
+    e.target.checked = false;
+    showYouTube(false, "The browser wasn't allowed to read YouTube's cookies, so automatic sync stays off.");
+    return;
+  }
+  await chrome.storage.local.set({ syncYouTube: true });
+  await syncNow();
+});
+
+async function loadYouTube() {
+  $("syncYouTube").checked = (await VG.getSettings()).syncYouTube;
+  showYouTubeStatus();
+}
+
 load();
 loadAny();
+loadYouTube();

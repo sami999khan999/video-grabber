@@ -9,6 +9,41 @@ var VG = (() => {
     notify: true,
     // Pass the user's login for the video's site along with a download (off unless they opt in)
     sendCookies: false,
+    // Keep the server's YouTube cookies in step with this browser's login (off unless they opt in)
+    syncYouTube: false,
+  };
+
+  // --- YouTube login -------------------------------------------------------------------
+
+  // Only youtube.com is read for the YouTube login, nothing else
+  const YOUTUBE = { origins: ["https://*.youtube.com/*"] };
+  const hasYouTube = () => chrome.permissions.contains(YOUTUBE);
+  const requestYouTube = () => chrome.permissions.request(YOUTUBE);
+  // Present only while someone is logged in to YouTube in this browser
+  const YOUTUBE_LOGIN_COOKIES = ["LOGIN_INFO", "SAPISID", "__Secure-3PAPISID", "__Secure-3PSID"];
+
+  /**
+   * Send this browser's YouTube login to the server, where it replaces the stored cookies
+   * (the same slot a manual cookies.txt upload uses). Remembers how it went in lastYouTubeSync.
+   */
+  const syncYouTubeLogin = async () => {
+    const record = async (result) => {
+      await chrome.storage.local.set({ lastYouTubeSync: { ...result, at: Date.now() } });
+      return result;
+    };
+    if (!(await hasYouTube())) {
+      return record({ ok: false, error: "The extension isn't allowed to read YouTube's cookies yet. Turn it on in Settings." });
+    }
+    const cookies = await chrome.cookies.getAll({ domain: "youtube.com" });
+    if (!cookies.some((c) => YOUTUBE_LOGIN_COOKIES.includes(c.name))) {
+      return record({ ok: false, error: "You're not logged in to YouTube in this browser. Log in on youtube.com, then try again." });
+    }
+    try {
+      const result = await api("/cookies/", { method: "POST", body: { content: toCookieText(cookies), origin: "extension" } });
+      return record({ ok: true, count: result.count });
+    } catch (err) {
+      return record({ ok: false, error: err.message });
+    }
   };
 
   // Seeing videos on any site needs the browser's OK for all sites (asked from Settings)
@@ -36,13 +71,17 @@ var VG = (() => {
       }
       for (const c of cookies) found.set(`${c.domain}|${c.path}|${c.name}`, c);
     }
-    if (!found.size) return null;
-    const lines = [...found.values()].map((c) => {
+    return found.size ? toCookieText([...found.values()]) : null;
+  };
+
+  /** Browser cookies as a Netscape cookies.txt, the format yt-dlp reads. */
+  function toCookieText(cookies) {
+    const lines = cookies.map((c) => {
       const domain = c.hostOnly ? c.domain.replace(/^\./, "") : c.domain.startsWith(".") ? c.domain : `.${c.domain}`;
       return [domain, c.hostOnly ? "FALSE" : "TRUE", c.path, c.secure ? "TRUE" : "FALSE", Math.floor(c.expirationDate || 0), c.name, c.value].join("\t");
     });
     return ["# Netscape HTTP Cookie File", ...lines, ""].join("\n");
-  };
+  }
 
   const getSettings = async () => ({ ...DEFAULTS, ...(await chrome.storage.local.get(Object.keys(DEFAULTS))) });
 
@@ -132,7 +171,17 @@ var VG = (() => {
     return `docker run -d -p ${port}:7845 -v video-grabber-data:/data sami999/video-grabber`;
   };
 
+  // "3 min ago" style, for sync times
+  const timeAgo = (ms) => {
+    const minutes = Math.round((Date.now() - ms) / 60000);
+    if (minutes < 1) return "just now";
+    if (minutes < 60) return `${minutes} min ago`;
+    const hours = Math.round(minutes / 60);
+    return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
+  };
+
   return {
+    YOUTUBE, hasYouTube, requestYouTube, YOUTUBE_LOGIN_COOKIES, syncYouTubeLogin, timeAgo,
     ALL_SITES, hasAllSites, requestAllSites, mediaKey, detectedMedia, cookieTextFor,
     runCommand,
     DEFAULTS, getSettings, normalizeServer, hasAccess, requestAccess, api,

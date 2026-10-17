@@ -93,6 +93,8 @@ export interface StationStatus {
   max_parallel: number;
   /** Where the cookies come from: uploaded from the page, a mounted file, or none */
   cookies: "upload" | "file" | null;
+  /** For uploaded cookies: synced by the browser extension or uploaded as a file, and when */
+  cookies_detail: { origin: "file" | "extension"; updated_at: number; count: number | null } | null;
 }
 
 export const ACTIVE_STATUSES: JobStatus[] = ["queued", "starting", "downloading", "processing", "merging"];
