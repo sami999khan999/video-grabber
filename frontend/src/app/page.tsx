@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useSyncExternalStore } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 
 import { BottomBar } from "@/components/wall/BottomBar";
@@ -69,7 +69,8 @@ export default function Home() {
 
   const tune = useMutation({
     mutationFn: (link: string) => videoApi.fetchInfo(link),
-    onSuccess: (info) => {
+    onSuccess: (info, link) => {
+      setUrl((current) => current || link);
       setSource(info);
       setView("tune");
       setActionError(null);
@@ -80,6 +81,15 @@ export default function Home() {
       }
     },
   });
+
+  // /?url=... (from the browser extension) opens straight on that link
+  const { mutate: tuneLink } = tune;
+  useEffect(() => {
+    const link = new URLSearchParams(window.location.search).get("url");
+    if (!link) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    tuneLink(link);
+  }, [tuneLink]);
 
   const queue = useMutation({
     mutationFn: (items: NewJob[]) => videoApi.queue(items),

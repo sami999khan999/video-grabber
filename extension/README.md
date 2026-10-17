@@ -1,0 +1,84 @@
+# Video Grabber browser extension
+
+A remote control for your [Video Grabber](../README.md) server. Open a video or playlist, click the
+toolbar button, pick a quality (or audio only) and **Grab**; the popup shows every download's
+progress live. Works in Chrome, Edge, Brave, Opera and Firefox.
+
+<p>
+  <img src="../docs/screenshots/extension-playlist.png" alt="Popup on a playlist: quality presets and the videos to grab" width="300">
+  <img src="../docs/screenshots/extension-live.png" alt="Popup with downloads in progress" width="300">
+</p>
+
+## What it does
+
+- **Popup**: reads the page you're on and lists every quality the server finds (4K to 144p, 60fps/HDR,
+  MP4/MKV, sizes) plus M4A, Opus and MP3. Playlists show their videos with one quality for all.
+- **Live progress**: speed, time left, merge/convert step; save, cancel or retry from the list.
+- **Right-click menu**: *Grab with Video Grabber → Best / 1080p / 720p / M4A / MP3* on any page or link.
+- **Badge and notifications**: the toolbar shows how many downloads are running; you get a
+  notification when one is ready or fails.
+- **Auto-save**: downloads you start from the extension go straight to your Downloads folder.
+
+The video is downloaded by the server (yt-dlp, FFmpeg), not by the browser, so YouTube's split
+streams and signed URLs are handled the same way as in the web app.
+
+## Install
+
+You need a running server first:
+
+```bash
+docker run -d -p 8000:8000 -v video-grabber-data:/data sami999/video-grabber
+```
+
+### Chrome, Edge, Brave, Opera
+
+1. Open `chrome://extensions` (`edge://extensions` in Edge).
+2. Turn on **Developer mode**.
+3. Click **Load unpacked** and choose the **`extension/release/chrome`** folder.
+4. Pin **Video Grabber** to the toolbar.
+
+> The Chrome Web Store doesn't accept YouTube downloaders, so the extension is installed this way.
+
+### Firefox (128 or newer)
+
+- **Try it**: open `about:debugging#/runtime/this-firefox` → **Load Temporary Add-on…** → pick
+  **`extension/release/firefox/manifest.json`**. It stays until Firefox restarts.
+- **Keep it**: zip the contents of `release/firefox` and sign it on
+  [addons.mozilla.org](https://addons.mozilla.org/developers/) (self-distributed / unlisted is
+  fine), then install the signed `.xpi`.
+- Firefox asks before an extension may talk to a site: open the popup and click **Allow access**.
+
+## Settings
+
+Right-click the toolbar button → **Options** (or the gear in the popup):
+
+| Setting | Default | |
+|---|---|---|
+| Server address | `http://localhost:8000` | Any address works, e.g. `http://192.168.1.20:8000`; the browser asks once for permission |
+| Save files when done | on | Sends finished downloads to your Downloads folder |
+| Notifications | on | Queued / ready / failed |
+
+## Notes
+
+- The server has no login. Point the extension at a server on your own machine or network.
+- "Sign in to confirm you're not a bot" comes from YouTube; upload cookies in the station's
+  **Cookies** tab.
+- Chrome wakes the extension's background at most every 30 seconds, so with the popup closed,
+  auto-save and notifications can lag by up to half a minute. With the popup open they're instant.
+
+## Files
+
+| Path | |
+|---|---|
+| `release/chrome/` | Ready to load in Chrome, Edge, Brave, Opera |
+| `release/firefox/` | Ready to load in Firefox |
+| `src/` | The source both are built from |
+| `src/manifest.base.json` | Shared manifest (Manifest V3); `build.mjs` adds each browser's background setup |
+| `src/popup.*` | The toolbar popup |
+| `src/background.js` | Right-click menu, badge, notifications, auto-save |
+| `src/options.*` | Server address and switches |
+| `src/shared.js` | Settings, API calls, formatting |
+| `src/icons/` | `icon.svg` and the PNG sizes made from it |
+
+After changing anything in `src/`, run `node build.mjs` (no dependencies) to refresh both release
+folders, and commit them.

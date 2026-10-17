@@ -1,0 +1,98 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video Grabber settings</title>
+    <link rel="stylesheet" href="popup.css" />
+    <style>
+      body {
+        width: auto;
+        max-width: 560px;
+        max-height: none;
+        margin: 0 auto;
+        padding: 24px 16px;
+      }
+      h1 {
+        margin: 0 0 4px;
+      }
+      label.field {
+        display: block;
+        margin: 16px 0 6px;
+        font-weight: 900;
+      }
+      .row {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .row input[type="url"] {
+        flex: 1;
+        min-width: 220px;
+        height: 40px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: #0a0c0f;
+        border: var(--outline);
+        color: var(--paper);
+        font: inherit;
+      }
+      .toggle {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-top: 14px;
+        cursor: pointer;
+      }
+      .toggle input {
+        width: 18px;
+        height: 18px;
+        accent-color: #ffd43b;
+      }
+      #result {
+        margin-top: 14px;
+      }
+      .ok {
+        padding: 8px 10px;
+        border-radius: 10px;
+        border: 2px solid rgba(182, 244, 0, 0.5);
+        background: rgba(182, 244, 0, 0.1);
+        color: #e4ff9e;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="card">
+      <span class="sticker yellow">Settings</span>
+      <h1 class="title">Video Grabber</h1>
+      <p class="meta">The extension sends links to your Video Grabber server and shows its downloads.</p>
+
+      <form id="form">
+        <label class="field" for="server">Server address</label>
+        <div class="row">
+          <input id="server" type="url" required placeholder="http://localhost:8000" />
+          <button type="button" id="test" class="btn small">Test</button>
+        </div>
+        <p class="meta">
+          Where the container listens, e.g. <code>http://localhost:8000</code> or
+          <code>http://192.168.1.20:8000</code>. Start one with
+          <code>docker run -d -p 8000:8000 -v video-grabber-data:/data sami999/video-grabber</code>
+        </p>
+
+        <label class="toggle"><input id="autoSave" type="checkbox" /> Save files to Downloads as soon as they finish</label>
+        <label class="toggle"><input id="notify" type="checkbox" /> Show a notification when a download is queued, done or fails</label>
+
+        <p style="margin-top: 18px"><button type="submit" class="btn yellow">Save settings</button></p>
+      </form>
+      <div id="result" aria-live="polite"></div>
+    </div>
+
+    <script src="shared.js"></script>
+    <script src="options.js"></script>
+  </body>
+</html>

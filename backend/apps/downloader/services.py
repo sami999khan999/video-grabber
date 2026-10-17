@@ -1,3 +1,7 @@
+import os
+import threading
+import time
+
 from yt_dlp.utils import get_compatible_ext
 
 from common.utils.log import log
@@ -5,11 +9,35 @@ from common.utils.log import log
 from .ytdlp import extract
 
 
+# Lookups are reused for a while, so opening the same link again (web app, extension popup)
+# doesn't send the site another round of requests
+INFO_CACHE_SECONDS = float(os.environ.get("INFO_CACHE_MINUTES", "10")) * 60
+_info_cache = {}
+_info_lock = threading.Lock()
+
+
 def extract_video_info(url: str) -> dict:
     """
     Extract video metadata (title, thumbnail, duration, available formats)
     without downloading the video. Playlist links return the list of entries.
     """
+    now = time.time()
+    with _info_lock:
+        cached = _info_cache.get(url)
+        if cached and now - cached[0] < INFO_CACHE_SECONDS:
+            return cached[1]
+    result = _extract_video_info(url)
+    with _info_lock:
+        # Keep the cache small: drop expired entries, then the oldest
+        for key in [k for k, (t, _) in _info_cache.items() if now - t >= INFO_CACHE_SECONDS]:
+            del _info_cache[key]
+        if len(_info_cache) >= 200:
+            del _info_cache[min(_info_cache, key=lambda k: _info_cache[k][0])]
+        _info_cache[url] = (now, result)
+    return result
+
+
+def _extract_video_info(url: str) -> dict:
     log("info", f"Extracting info for URL: {url}")
     info = extract(
         url,

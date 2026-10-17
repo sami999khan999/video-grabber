@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Video Grabber</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="bar">
+      <img src="icons/icon-48.png" alt="" class="logo" />
+      <div class="brand">
+        <strong>Video Grabber</strong>
+        <span id="server-label" class="muted"></span>
+      </div>
+      <span id="link-dot" class="dot" title="Server status"></span>
+      <button id="open-station" class="icon-btn" title="Open the station in a tab" aria-label="Open the station in a tab">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" /></svg>
+      </button>
+      <button id="open-options" class="icon-btn" title="Settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1Z" /></svg>
+      </button>
+    </header>
+
+    <main>
+      <!-- Shown when the browser hasn't been allowed to talk to the server yet -->
+      <section id="access" class="card" hidden>
+        <span class="sticker pink">Permission</span>
+        <p>The extension needs your OK to talk to <b id="access-server"></b>.</p>
+        <button id="grant" class="btn yellow">Allow access</button>
+      </section>
+
+      <section id="source" class="card" aria-live="polite"></section>
+
+      <form id="link-form" class="link-form">
+        <label for="link" class="sr-only">Another video or playlist link</label>
+        <input id="link" type="url" placeholder="…or paste another link" autocomplete="off" spellcheck="false" />
+        <button type="submit" class="btn small">Tune in</button>
+      </form>
+
+      <section id="jobs-section">
+        <div class="section-head">
+          <span class="sticker teal">On air</span>
+          <button id="clear" class="btn small ghost">Clear finished</button>
+        </div>
+        <ul id="jobs" class="jobs"></ul>
+      </section>
+    </main>
+
+    <footer class="grab-bar">
+      <button id="grab" class="btn yellow wide" disabled>
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg>
+        <span id="grab-label">Grab</span>
+        <span id="grab-count" class="count">x0</span>
+      </button>
+    </footer>
+
+    <script src="shared.js"></script>
+    <script src="popup.js"></script>
+  </body>
+</html>

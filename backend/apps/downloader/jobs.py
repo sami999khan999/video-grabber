@@ -11,6 +11,7 @@ from yt_dlp.utils import DownloadCancelled
 
 from common.utils.log import log
 
+from .politeness import gate, polite_options, retry_pause
 from .ytdlp import extract
 
 # Jobs live in memory, so the app must run as a single process (threads are fine)
@@ -247,7 +248,6 @@ class JobManager:
     def _run(self, job):
         if job.cancel_event.is_set():
             return
-        self._update(job, status="starting", stage="Resolving")
         os.makedirs(job.dir, exist_ok=True)
 
         opts = dict(
@@ -259,25 +259,30 @@ class JobManager:
             format=format_selector(job.format_id),
             progress_hooks=[lambda d: self._on_progress(job, d)],
             postprocessor_hooks=[lambda d: self._on_postprocess(job, d)],
+            **polite_options(),
         )
         if job.format_id == "audio-mp3":
             opts["postprocessors"] = [MP3_POSTPROCESSOR]
 
         try:
             log("info", f"Job {job.id}: downloading {job.url} as {job.format_id}")
-            # YouTube now and then refuses a stream with 403 (often when several downloads of
-            # the same video run at once); a second try usually gets through
-            for attempt in (1, 2):
-                try:
-                    info = extract(job.url, download=True, **opts)
-                    break
-                except DownloadCancelled:
-                    raise
-                except Exception as exc:
-                    if attempt == 2 or job.cancel_event.is_set() or "HTTP Error 403" not in str(exc):
+            # Polite mode: wait for one of the site's few slots and its spacing between starts
+            with gate.slot(job.url, job.cancel_event, lambda stage: self._update(job, status="queued", stage=stage)):
+                self._update(job, status="starting", stage="Resolving")
+                # YouTube now and then refuses a stream with 403 (often when several downloads of
+                # the same video run at once); a second try, after a pause, usually gets through
+                for attempt in (1, 2):
+                    try:
+                        info = extract(job.url, download=True, **opts)
+                        break
+                    except DownloadCancelled:
                         raise
-                    log("warning", f"Job {job.id}: 403, trying once more")
-                    self._update(job, status="starting", stage="Retrying", progress=0.0, streams_done=0)
+                    except Exception as exc:
+                        if attempt == 2 or job.cancel_event.is_set() or "HTTP Error 403" not in str(exc):
+                            raise
+                        log("warning", f"Job {job.id}: 403, trying once more")
+                        self._update(job, status="starting", stage="Retrying shortly", progress=0.0, streams_done=0)
+                        retry_pause(job.cancel_event)
 
             # requested_downloads holds the final path (after merging); fall back
             # to the largest file in the job folder

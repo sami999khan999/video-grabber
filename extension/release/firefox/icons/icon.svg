@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- antenna -->
+  <path d="M64 30 42 8M64 30 86 8" stroke="#08090b" stroke-width="9" stroke-linecap="round"/>
+  <path d="M64 30 42 8M64 30 86 8" stroke="#d6d8dd" stroke-width="4" stroke-linecap="round"/>
+  <!-- body -->
+  <rect x="8" y="28" width="112" height="88" rx="22" fill="#e3e4e8" stroke="#08090b" stroke-width="7"/>
+  <!-- screen -->
+  <rect x="20" y="40" width="70" height="62" rx="14" fill="#ffd43b" stroke="#08090b" stroke-width="6"/>
+  <path d="M60 48 40 75h14l-4 19 20-28H56l4-18Z" fill="#08090b"/>
+  <!-- knobs -->
+  <circle cx="105" cy="58" r="8" fill="#ff3d3d" stroke="#08090b" stroke-width="5"/>
+  <circle cx="105" cy="84" r="8" fill="#22d3c5" stroke="#08090b" stroke-width="5"/>
+</svg>

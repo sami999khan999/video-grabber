@@ -100,6 +100,23 @@ docker compose up -d
   <img src="docs/screenshots/mobile.png" alt="The station on a phone" width="300">
 </p>
 
+## 🧩 Browser extension
+
+Grab straight from the page you're watching. The extension in [`extension/`](extension/) talks to
+your server: its popup lists every quality for the current tab, queues downloads and shows their
+progress live. A right-click menu, a badge counting active downloads, notifications and auto-save
+to your Downloads folder come with it.
+
+<p align="center">
+  <img src="docs/screenshots/extension-playlist.png" alt="Extension popup on a playlist" width="300">
+  &nbsp;
+  <img src="docs/screenshots/extension-live.png" alt="Extension popup with downloads in progress" width="300">
+</p>
+
+**Chrome / Edge / Brave:** `chrome://extensions` → Developer mode → **Load unpacked** → pick
+`extension/release/chrome`. **Firefox:** `about:debugging` → **Load Temporary Add-on** → pick
+`extension/release/firefox/manifest.json`. Details in [extension/README.md](extension/README.md).
+
 ## 🧠 How it works
 
 ```mermaid
@@ -121,6 +138,7 @@ flowchart LR
   every change goes out to all open tabs over one event stream.
 - **Files**: video and audio streams are merged by FFmpeg (MP3 is converted), served once finished
   and deleted after `JOB_TTL_HOURS`.
+- **Pacing**: polite mode limits and spaces each site's downloads (see below).
 - **YouTube**: requests go out without cookies first. Only if YouTube demands a signed-in user is
   the request repeated with your cookies. A job that comes out below the chosen resolution says so.
 
@@ -131,6 +149,11 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 | Variable | Default | What it does |
 |---|---|---|
 | `MAX_PARALLEL_DOWNLOADS` | `3` | Downloads that run at the same time; the rest wait |
+| `POLITE_MODE` | `1` | Pace traffic per site (below); `0` turns it off |
+| `PER_SITE_PARALLEL` | `2` | Most downloads from one site at once, in polite mode |
+| `START_GAP_MIN` / `START_GAP_MAX` | `3` / `8` | Random seconds between starting downloads from one site |
+| `REQUEST_SLEEP` | `1` | Seconds yt-dlp waits between its own requests |
+| `INFO_CACHE_MINUTES` | `10` | How long a link lookup is reused instead of asked again |
 | `JOB_TTL_HOURS` | `6` | How long finished files stay on the server |
 | `ALLOWED_HOSTS` | `*` | Comma-separated host names the app answers to |
 | `SECRET_KEY` | built-in fallback | Django secret key (nothing signs with it today, set it anyway) |
@@ -143,6 +166,14 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 > [!NOTE]
 > Jobs live in memory, so the app runs as a single Gunicorn process. Restarting the container
 > clears the queue and the finished files (uploaded cookies stay in `/data`).
+
+## 🐢 Polite mode (on by default)
+
+Sites block addresses that send bursts of requests, so the server paces itself: at most 2 downloads
+per site at once, a random 3–8 s gap between starting them, a 1 s pause between yt-dlp's own
+requests, lookups reused for 10 minutes, and a longer random wait before retrying a refused stream.
+A 50-video playlist trickles in instead of hitting the site all at once. Nothing can promise a site
+will never block you, but this keeps the traffic looking like a person rather than a bot.
 
 ## 🍪 YouTube says "Sign in to confirm you're not a bot"
 
@@ -234,6 +265,7 @@ frontend/
 ├── src/components/wall/  # TvWall, TopBar, SideRail, panels, BottomBar
 ├── src/hooks/use-jobs.ts # live job list (Server-Sent Events)
 └── src/lib/api.ts
+extension/                # browser extension: src/, release/chrome, release/firefox
 Dockerfile                # Node builds the UI, Python + FFmpeg + Deno run it all
 docker-compose.yml
 ```

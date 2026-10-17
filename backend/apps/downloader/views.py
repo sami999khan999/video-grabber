@@ -9,6 +9,7 @@ from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.views.decorators.http import require_GET
 
 from .jobs import FINISHED, MAX_PARALLEL_DOWNLOADS, clean_error, get_manager
+from .politeness import PER_SITE_PARALLEL, POLITE_MODE
 from .services import extract_video_info
 from .ytdlp import cookies_source, delete_uploaded_cookies, save_uploaded_cookies
 
@@ -19,6 +20,8 @@ class StatusView(APIView):
     def get(self, request):
         return Response({
             "max_parallel": MAX_PARALLEL_DOWNLOADS,
+            "polite": POLITE_MODE,
+            "per_site_parallel": PER_SITE_PARALLEL if POLITE_MODE else None,
             # "upload" (added from the page), "file" (COOKIES_FILE) or null
             "cookies": cookies_source(),
         })

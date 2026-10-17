@@ -1,0 +1,45 @@
+{
+  "manifest_version": 3,
+  "name": "Video Grabber",
+  "short_name": "Video Grabber",
+  "version": "1.0.0",
+  "description": "Send videos and playlists to your Video Grabber server: pick any quality or audio only, and watch the downloads live.",
+  "homepage_url": "https://github.com/sami999khan999/video_grabber",
+  "icons": {
+    "16": "icons/icon-16.png",
+    "32": "icons/icon-32.png",
+    "48": "icons/icon-48.png",
+    "128": "icons/icon-128.png"
+  },
+  "action": {
+    "default_title": "Video Grabber",
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon-16.png",
+      "32": "icons/icon-32.png"
+    }
+  },
+  "options_ui": {
+    "page": "options.html",
+    "open_in_tab": true
+  },
+  "permissions": [
+    "activeTab",
+    "contextMenus",
+    "downloads",
+    "notifications",
+    "storage",
+    "alarms"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "http://127.0.0.1/*"
+  ],
+  "optional_host_permissions": [
+    "http://*/*",
+    "https://*/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
