@@ -76,7 +76,24 @@ def clean_error(exc: Exception) -> str:
             "(\"confirm you're not a bot\"). Upload cookies.txt from a browser that is "
             "logged in to YouTube, then try again."
         )
-    return re.sub(r"^ERROR:\s*", "", message)
+    message = re.sub(r"^ERROR:\s*", "", message)
+    if message.startswith("Unsupported URL"):
+        return (
+            "No video found at this link. Either the site isn't supported, or the page needs "
+            "you to be logged in (a login or private page, like a chat)."
+        )
+    if "is not a valid URL" in message:
+        return "That doesn't look like a link. Paste the full address, starting with https://."
+    if "DRM" in message:
+        return "This video is DRM-protected (like on Netflix or Spotify), so it can't be downloaded."
+    if "HTTP Error 404" in message:
+        return "The site says this page doesn't exist (404). Check the link."
+    if "HTTP Error 403" in message:
+        return "The site refused the request (403). Try again in a little while."
+    # "[generic] abc123: Unable to ... (caused by <HTTPError ...>)" -> "Unable to ..."
+    message = re.sub(r"^\[[\w:]+\]\s+[^:]+:\s*", "", message)
+    message = re.sub(r"\s*\(caused by .*\)\s*$", "", message)
+    return message
 
 
 class Job:

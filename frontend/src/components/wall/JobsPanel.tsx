@@ -154,7 +154,7 @@ function JobRow({
             <div className="mt-2 flex items-start gap-2 rounded-xl border-2 border-[var(--red)]/50 bg-[var(--red)]/10 px-2.5 py-1.5 text-[12px] font-semibold text-[#ffc2c2]">
               <TriangleAlert size={14} className="mt-0.5 shrink-0 text-[var(--red)]" strokeWidth={2.75} />
               <span className="min-w-0 flex-1">
-                <span className="line-clamp-3 break-words">{job.error}</span>
+                <span className="line-clamp-3 [overflow-wrap:anywhere]">{job.error}</span>
                 {botBlock && (
                   <button className="mt-1 font-black text-[var(--yellow)] underline underline-offset-2" onClick={onOpenCookies}>
                     Add cookies

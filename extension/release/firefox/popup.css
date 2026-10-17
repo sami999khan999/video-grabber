@@ -337,6 +337,8 @@ main {
   border: 2px solid rgba(255, 61, 61, 0.6);
   background: rgba(255, 61, 61, 0.1);
   color: #ffc2c2;
+  /* Long links have no spaces to wrap at */
+  overflow-wrap: anywhere;
 }
 
 .spinner {
