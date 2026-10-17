@@ -56,4 +56,4 @@ EXPOSE 8000
 
 # Jobs are kept in memory, so there is exactly one process; threads serve the
 # requests and the live progress streams (one per open tab), downloads run in their own pool.
-CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT} --workers 1 --threads ${WEB_THREADS:-32} --timeout ${WEB_TIMEOUT:-120} --access-logfile -"]
+CMD ["sh", "-c", "exec gunicorn config.wsgi:application --bind 0.0.0.0:${PORT} --workers 1 --threads ${WEB_THREADS:-32} --timeout ${WEB_TIMEOUT:-120} --graceful-timeout 5 --access-logfile -"]

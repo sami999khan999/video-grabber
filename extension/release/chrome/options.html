@@ -6,12 +6,33 @@
     <title>Video Grabber settings</title>
     <link rel="stylesheet" href="popup.css" />
     <style>
+      /* One background for the whole window (the popup's is sized for a small fixed box) */
+      html {
+        min-height: 100%;
+        background:
+          radial-gradient(ellipse 70% 45% at 50% 0%, rgba(80, 220, 230, 0.28), transparent 70%),
+          linear-gradient(180deg, #0b4a57, #062430 45%, #031419) fixed;
+      }
       body {
         width: auto;
         max-width: 560px;
         max-height: none;
+        min-height: 100vh;
         margin: 0 auto;
-        padding: 24px 16px;
+        padding: 32px 16px;
+        background: none;
+      }
+      pre {
+        margin: 8px 0 0;
+        padding: 10px 12px;
+        overflow-x: auto;
+        border-radius: 10px;
+        border: 2px solid #08090b;
+        background: #0a0c0f;
+        color: #f4f1e8;
+        font-size: 12px;
+        white-space: pre-wrap;
+        word-break: break-all;
       }
       h1 {
         margin: 0 0 4px;
@@ -80,9 +101,9 @@
         </div>
         <p class="meta">
           Where the container listens, e.g. <code>http://localhost:8000</code> or
-          <code>http://192.168.1.20:8000</code>. Start one with
-          <code>docker run -d -p 8000:8000 -v video-grabber-data:/data sami999/video-grabber</code>
+          <code>http://192.168.1.20:8000</code>. Don't have one running? Start it with:
         </p>
+        <pre>docker run -d -p 8000:8000 -v video-grabber-data:/data sami999/video-grabber</pre>
 
         <label class="toggle"><input id="autoSave" type="checkbox" /> Save files to Downloads as soon as they finish</label>
         <label class="toggle"><input id="notify" type="checkbox" /> Show a notification when a download is queued, done or fails</label>

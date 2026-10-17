@@ -44,7 +44,9 @@ var VG = (() => {
         body: body ? JSON.stringify(body) : undefined,
       });
     } catch {
-      throw new Error(`Can't reach the server at ${server}. Is the container running?`);
+      const err = new Error(`Can't reach the server at ${server}. Is the container running?`);
+      err.offline = true;
+      throw err;
     }
     if (!res.ok) throw new Error(await readError(res, `The server answered ${res.status}.`));
     return res.status === 204 ? null : res.json();

@@ -49,6 +49,10 @@ const state = {
   preset: "best",
   jobs: [],
   stream: null,
+  // Server not answering: the popup shows the "off air" card and reconnects on its own
+  offline: false,
+  // Last link tuned in, so it can be looked up again once the server is back
+  lastUrl: "",
 };
 
 // --- start-up ------------------------------------------------------------------
@@ -97,8 +101,53 @@ async function checkServer() {
   } catch (err) {
     $("link-dot").className = "dot bad";
     $("link-dot").title = err.message;
-    renderSource({ error: err.message, hint: "Start it with: docker run -d -p 8000:8000 sami999/video-grabber" });
+    if (err.offline) setOffline(true);
+    else renderSource({ error: err.message });
   }
+}
+
+function setOffline(on) {
+  if (state.offline === on) return;
+  state.offline = on;
+  if (on) {
+    state.source = null;
+    renderOffline();
+  }
+  renderJobs();
+  updateGrab();
+}
+
+/** Back on air: check the server again and look the last link up again. */
+async function reconnect() {
+  state.offline = false;
+  renderSource({ placeholder: "Reconnecting…" });
+  await checkServer();
+  if (state.offline) return;
+  renderJobs();
+  if (state.lastUrl) tune(state.lastUrl);
+  else renderSource({ placeholder: "Open a video or playlist page, or paste a link below." });
+}
+
+function renderOffline() {
+  const box = $("source");
+  box.replaceChildren(
+    h(
+      "div",
+      { class: "offline" },
+      h("div", { class: "off-tv" }, h("img", { src: "icons/icon-128.png", alt: "" }), h("span", { class: "sticker red" }, "Off air")),
+      h("h1", { class: "title" }, "The server is off"),
+      h("p", { class: "meta" }, `Nothing answers at ${state.server}. Start the container and this popup reconnects by itself.`),
+      h("pre", {}, "docker compose up -d"),
+      h("p", { class: "meta" }, "in the project folder, or:"),
+      h("pre", {}, "docker run -d -p 8000:8000 -v video-grabber-data:/data sami999/video-grabber"),
+      h(
+        "div",
+        { class: "offline-actions" },
+        h("button", { class: "btn yellow small", onclick: reconnect }, "Try again"),
+        h("button", { class: "btn small", onclick: () => chrome.runtime.openOptionsPage() }, "Settings"),
+      ),
+    ),
+  );
 }
 
 function openStation() {
@@ -109,6 +158,8 @@ function openStation() {
 // --- tune in --------------------------------------------------------------------
 
 async function tune(url) {
+  state.lastUrl = url;
+  if (state.offline) return;
   state.source = null;
   updateGrab();
   renderSource({ loading: url });
@@ -122,7 +173,8 @@ async function tune(url) {
     }
     renderSource({ source });
   } catch (err) {
-    renderSource({ error: err.message });
+    if (err.offline) setOffline(true);
+    else renderSource({ error: err.message });
   }
   updateGrab();
 }
@@ -142,9 +194,11 @@ function renderSource({ loading, error, hint, placeholder, source }) {
   if (error) {
     const cookies = /cookies/i.test(error) && /bot|sign/i.test(error);
     box.append(
-      h("div", { class: "error" }, error),
-      cookies && h("p", { class: "meta" }, "Upload YouTube cookies in the station (Cookies tab), then try again."),
-      hint && h("p", { class: "meta" }, hint),
+      ...[
+        h("div", { class: "error" }, error),
+        cookies && h("p", { class: "meta" }, "Upload YouTube cookies in the station (Cookies tab), then try again."),
+        hint && h("p", { class: "meta" }, hint),
+      ].filter(Boolean),
     );
     return;
   }
@@ -278,7 +332,7 @@ function pendingItems() {
 }
 
 function updateGrab() {
-  const items = pendingItems();
+  const items = state.offline ? [] : pendingItems();
   $("grab").disabled = items.length === 0;
   $("grab-count").textContent = `x${items.length}`;
   $("grab-label").textContent =
@@ -305,8 +359,15 @@ async function grab() {
 function connectJobs() {
   const stream = new EventSource(`${state.server}/api/jobs/stream/`);
   state.stream = stream;
-  stream.onopen = () => ($("link-dot").className = "dot ok");
-  stream.onerror = () => ($("link-dot").className = "dot bad");
+  // EventSource keeps retrying while the server is down; its first success means it's back
+  stream.onopen = () => {
+    $("link-dot").className = "dot ok";
+    if (state.offline) reconnect();
+  };
+  stream.onerror = () => {
+    $("link-dot").className = "dot bad";
+    if (stream.readyState !== EventSource.OPEN) setOffline(true);
+  };
   stream.onmessage = (event) => {
     state.jobs = JSON.parse(event.data).jobs;
     renderJobs();
@@ -329,7 +390,11 @@ const LOOK = {
 function renderJobs() {
   const list = $("jobs");
   const jobs = [...state.jobs].sort(VG.byPriority).slice(0, 30);
-  $("clear").disabled = !state.jobs.some((j) => !VG.isActive(j));
+  $("clear").disabled = state.offline || !state.jobs.some((j) => !VG.isActive(j));
+  if (state.offline) {
+    list.replaceChildren(h("li", { class: "empty" }, "Server offline. Downloads show up here once it's back."));
+    return;
+  }
   if (!jobs.length) {
     list.replaceChildren(h("li", { class: "empty" }, "Dead air. Grab something!"));
     return;

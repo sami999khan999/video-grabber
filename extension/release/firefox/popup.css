@@ -355,6 +355,55 @@ main {
   to { transform: rotate(360deg); }
 }
 
+/* --- server off ------------------------------------------------------------- */
+
+.offline {
+  text-align: center;
+}
+
+.offline .title {
+  margin-top: 6px;
+}
+
+.off-tv {
+  position: relative;
+  display: inline-block;
+  margin: 2px 0 4px;
+}
+
+.off-tv img {
+  width: 72px;
+  height: 72px;
+  filter: grayscale(1) brightness(0.75);
+}
+
+.off-tv .sticker {
+  position: absolute;
+  right: -26px;
+  bottom: 6px;
+}
+
+.offline pre,
+.card pre {
+  margin: 8px 0 0;
+  padding: 8px 10px;
+  border-radius: 10px;
+  border: 2px solid var(--ink);
+  background: #0a0c0f;
+  color: var(--paper);
+  font-size: 11px;
+  text-align: left;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.offline-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 12px;
+}
+
 /* --- link form ------------------------------------------------------------- */
 
 .link-form {
