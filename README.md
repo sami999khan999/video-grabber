@@ -180,6 +180,8 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 | `PER_SITE_PARALLEL` | `2` | Most downloads from one site at once, in polite mode |
 | `START_GAP_MIN` / `START_GAP_MAX` | `3` / `8` | Random seconds between starting downloads from one site |
 | `REQUEST_SLEEP` | `1` | Seconds yt-dlp waits between its own requests |
+| `FRAGMENT_PARALLEL` | `8` | Pieces of an HLS/DASH video fetched at once; higher is faster, `1` is one at a time |
+| `HTTP_CHUNK_MB` | `10` | Plain files are fetched in chunks of this size, which gets past per-request throttling; `0` turns it off |
 | `INFO_CACHE_MINUTES` | `10` | How long a link lookup is reused instead of asked again |
 | `JOB_TTL_HOURS` | `6` | How long finished files stay on the server |
 | `ALLOWED_HOSTS` | `*` | Comma-separated host names the app answers to |

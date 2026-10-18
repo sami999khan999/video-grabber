@@ -16,6 +16,11 @@ from .ytdlp import clean_headers, extract
 
 # Jobs live in memory, so the app must run as a single process (threads are fine)
 MAX_PARALLEL_DOWNLOADS = int(os.environ.get("MAX_PARALLEL_DOWNLOADS", "3"))
+# HLS/DASH videos come in many small pieces; fetching several at once is what makes them fast
+FRAGMENT_PARALLEL = max(1, int(os.environ.get("FRAGMENT_PARALLEL", "8")))
+# Plain files are asked for in chunks of this size: servers that throttle one long request
+# (YouTube does) serve each fresh chunk at full speed
+HTTP_CHUNK_MB = float(os.environ.get("HTTP_CHUNK_MB", "10"))
 JOB_TTL_SECONDS = float(os.environ.get("JOB_TTL_HOURS", "6")) * 3600
 DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR") or os.path.join(
     tempfile.gettempdir(), "video-grabber"
@@ -282,10 +287,13 @@ class JobManager:
             # Merged video + audio goes into mp4 when the codecs allow it, mkv otherwise
             merge_output_format="mp4/mkv",
             format=format_selector(job.format_id),
+            concurrent_fragment_downloads=FRAGMENT_PARALLEL,
             progress_hooks=[lambda d: self._on_progress(job, d)],
             postprocessor_hooks=[lambda d: self._on_postprocess(job, d)],
             **polite_options(),
         )
+        if HTTP_CHUNK_MB > 0:
+            opts["http_chunk_size"] = int(HTTP_CHUNK_MB * 1024 * 1024)
         if job.format_id == "audio-mp3":
             opts["postprocessors"] = [MP3_POSTPROCESSOR]
 
