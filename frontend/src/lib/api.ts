@@ -204,3 +204,12 @@ export const formatDuration = (seconds: number | null | undefined) => {
   const mm = h ? m.toString().padStart(2, "0") : m.toString();
   return `${h ? `${h}:` : ""}${mm}:${s.toString().padStart(2, "0")}`;
 };
+
+/** How long ago a unix time (seconds) was, e.g. "5 min ago" */
+export const ago = (seconds: number) => {
+  const minutes = Math.round((Date.now() / 1000 - seconds) / 60);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
+};

@@ -1,9 +1,11 @@
 "use client";
 
 import { Check, Music2, Play, TriangleAlert } from "lucide-react";
-import { byPriority, isActive, Job } from "@/lib/api";
+import { ago, byPriority, formatBytes, formatDuration, isActive, Job, StationStatus } from "@/lib/api";
 
 type Filler = "static" | "bars" | "off" | { text: string; bg: string; color?: string; icon?: "play" | "music" };
+/** A set that reads out the station instead of showing a download; its filler is the idle look */
+type Gauge = "speed" | "eta" | "ready" | "login" | "lost";
 
 interface Slot {
   id: string;
@@ -17,22 +19,23 @@ interface Slot {
   z: number;
   body?: string;
   filler?: Filler;
+  gauge?: Gauge;
   cones?: "two" | "big-small";
 }
 
 // A hand-placed pile: back row on top, the big set in front. Percent of a 16:11 box.
 const SLOTS: Slot[] = [
   // Top row
-  { id: "t8", kind: "tv", x: 13, y: 9, w: 16, h: 25, rot: 3, z: 1, body: "#cdbb92", filler: "off" },
-  { id: "t9", kind: "tv", x: 30, y: 1, w: 16, h: 25, rot: -2, z: 1, body: "#d6d8dd", filler: { text: "REC", bg: "#ff3d3d", color: "#fff" } },
+  { id: "t8", kind: "tv", x: 13, y: 9, w: 16, h: 25, rot: 3, z: 1, body: "#cdbb92", filler: "off", gauge: "lost" },
+  { id: "t9", kind: "tv", x: 30, y: 1, w: 16, h: 25, rot: -2, z: 1, body: "#d6d8dd", filler: { text: "REC", bg: "#ff3d3d", color: "#fff" }, gauge: "speed" },
   { id: "s6", kind: "speaker", x: 46, y: 9, w: 8, h: 25, z: 1, cones: "big-small" },
   { id: "t10", kind: "tv", x: 54, y: 7, w: 17, h: 27, rot: 1, z: 1, body: "#3a3e45", filler: "static" },
-  { id: "t11", kind: "tv", x: 71, y: 19, w: 15, h: 25, rot: 4, z: 1, body: "#d6d8dd", filler: { text: "", bg: "#b6f400", icon: "play" } },
+  { id: "t11", kind: "tv", x: 71, y: 19, w: 15, h: 25, rot: 4, z: 1, body: "#d6d8dd", filler: { text: "", bg: "#b6f400", icon: "play" }, gauge: "ready" },
   // Middle row
-  { id: "t4", kind: "tv", x: 2, y: 33, w: 18, h: 26, rot: -3, z: 2, body: "#3a3e45", filler: { text: "", bg: "#22d3c5", icon: "music" } },
+  { id: "t4", kind: "tv", x: 2, y: 33, w: 18, h: 26, rot: -3, z: 2, body: "#3a3e45", filler: { text: "", bg: "#22d3c5", icon: "music" }, gauge: "login" },
   { id: "s4", kind: "speaker", x: 20, y: 37, w: 9, h: 29, z: 2, cones: "two" },
   { id: "t5", kind: "tv", x: 29, y: 25, w: 18, h: 35, rot: -1, z: 2, body: "#d6d8dd", filler: "static" },
-  { id: "t6", kind: "tv", x: 47, y: 33, w: 17, h: 27, rot: 2, z: 2, body: "#5fb7b0", filler: { text: "HD", bg: "#ffd43b" } },
+  { id: "t6", kind: "tv", x: 47, y: 33, w: 17, h: 27, rot: 2, z: 2, body: "#5fb7b0", filler: { text: "HD", bg: "#ffd43b" }, gauge: "eta" },
   { id: "s5", kind: "speaker", x: 64, y: 31, w: 10, h: 31, z: 2, cones: "two" },
   { id: "t7", kind: "tv", x: 74, y: 43, w: 18, h: 27, rot: -2, z: 2, body: "#cdbb92", filler: "bars" },
   // Bottom row
@@ -44,8 +47,8 @@ const SLOTS: Slot[] = [
   { id: "t3", kind: "tv", x: 85, y: 69, w: 15, h: 31, rot: 3, z: 3, body: "#d6d8dd", filler: { text: "VG", bg: "#ff5fa2" } },
 ];
 
-// Which sets get downloads first: the most visible ones
-const JOB_ORDER = ["t5", "t6", "t1", "t2", "t4", "t7", "t10", "t9", "t3", "t8", "t11"];
+// The static and colour-bar sets show downloads, most visible first; the last one counts the rest
+const JOB_ORDER = ["t5", "t1", "t2", "t7", "t10"];
 
 interface TvWallProps {
   jobs: Job[];
@@ -54,10 +57,12 @@ interface TvWallProps {
   title?: string;
   tuning: boolean;
   live: boolean;
+  status?: StationStatus;
   onPickJob: (job: Job) => void;
+  onOpen: (view: "queue" | "saved" | "auth") => void;
 }
 
-export function TvWall({ jobs, image, title, tuning, live, onPickJob }: TvWallProps) {
+export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, onOpen }: TvWallProps) {
   // Live downloads get the most visible sets
   const ordered = [...jobs].sort(byPriority);
   const shown = ordered.slice(0, JOB_ORDER.length);
@@ -83,6 +88,8 @@ export function TvWall({ jobs, image, title, tuning, live, onPickJob }: TvWallPr
           <div className="pp-bob h-full w-full" style={{ animationDelay: `${(slot.x % 7) * -0.13}s` }}>
             {slot.kind === "speaker" ? (
               <Speaker cones={slot.cones} />
+            ) : slot.gauge ? (
+              <GaugeTv slot={slot} gauge={slot.gauge} jobs={jobs} status={status} onOpen={onOpen} />
             ) : slot.id === "main" ? (
               <MainTv image={image} title={title} tuning={tuning} />
             ) : (
@@ -162,6 +169,79 @@ function TvBody({
     <div className="pp-tv" style={style} aria-hidden>
       {inner}
     </div>
+  );
+}
+
+interface Reading {
+  value: string;
+  caption?: string;
+  bg: string;
+  led: { color: string; blink?: boolean };
+  view?: "queue" | "saved" | "auth";
+}
+
+/** What a gauge set shows right now; null when there is nothing to report (it shows its filler) */
+function readGauge(gauge: Gauge, jobs: Job[], status?: StationStatus): Reading | null {
+  const downloading = jobs.filter((j) => j.status === "downloading");
+  switch (gauge) {
+    case "speed": {
+      const speed = downloading.reduce((sum, j) => sum + (j.speed ?? 0), 0);
+      return speed > 0 ? { value: `${formatBytes(speed)}/s`, caption: "incoming", bg: "#ff3d3d", led: { color: "#ff3d3d", blink: true } } : null;
+    }
+    case "eta": {
+      // Downloads run side by side, so the queue is done when the slowest one is
+      const etas = downloading.map((j) => j.eta).filter((eta): eta is number => eta != null);
+      return etas.length ? { value: formatDuration(Math.max(...etas)), caption: "left", bg: "#ffd43b", led: { color: "#ffd43b" } } : null;
+    }
+    case "ready": {
+      const ready = jobs.filter((j) => j.status === "done").length;
+      return ready ? { value: `${ready}`, caption: "ready", bg: "#b6f400", led: { color: "#b6f400" }, view: "saved" } : null;
+    }
+    case "lost": {
+      const lost = jobs.filter((j) => j.status === "error").length;
+      return lost ? { value: `${lost}`, caption: "lost", bg: "#ff3d3d", led: { color: "#ff3d3d", blink: true }, view: "queue" } : null;
+    }
+    case "login": {
+      if (!status) return null;
+      if (!status.cookies) return { value: "No login", caption: "YouTube", bg: "#ff5fa2", led: { color: "#ff3d3d" }, view: "auth" };
+      const since = status.cookies_detail?.updated_at;
+      return { value: "Logged in", caption: since ? ago(since) : "YouTube", bg: "#22d3c5", led: { color: "#b6f400" }, view: "auth" };
+    }
+  }
+}
+
+function GaugeTv({
+  slot,
+  gauge,
+  jobs,
+  status,
+  onOpen,
+}: {
+  slot: Slot;
+  gauge: Gauge;
+  jobs: Job[];
+  status?: StationStatus;
+  onOpen: (view: "queue" | "saved" | "auth") => void;
+}) {
+  const reading = readGauge(gauge, jobs, status);
+  if (!reading) {
+    return (
+      <TvBody body={slot.body}>
+        <FillerScreen filler={slot.filler} />
+      </TvBody>
+    );
+  }
+  const { view } = reading;
+  const label = [reading.value, reading.caption].filter(Boolean).join(" ");
+  return (
+    <TvBody body={slot.body} led={reading.led} onClick={view ? () => onOpen(view) : undefined} label={label}>
+      <div className="pp-screen-fill flex flex-col items-center justify-center gap-[8%] px-[8%]" style={{ background: reading.bg }}>
+        <span className="pp-screen-big max-w-full truncate -rotate-3 rounded-[0.2em] border-[3px] border-[#08090b] bg-white px-[0.3em] text-[clamp(9px,16cqh,40px)] text-[#08090b] shadow-[4px_4px_0_#08090b]">
+          {reading.value}
+        </span>
+        {reading.caption && <span className="pp-screen-small max-w-full truncate uppercase text-[#08090b]">{reading.caption}</span>}
+      </div>
+    </TvBody>
   );
 }
 

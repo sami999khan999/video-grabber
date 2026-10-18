@@ -187,7 +187,9 @@ export default function Home() {
               title={source?.title}
               tuning={tune.isPending}
               live={live}
+              status={status}
               onPickJob={(job) => setView(job.status === "done" ? "saved" : "queue")}
+              onOpen={setView}
             />
           </div>
         </section>

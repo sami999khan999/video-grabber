@@ -2,21 +2,13 @@
 
 import { useRef, useState } from "react";
 import { FileUp, Loader2, Trash2 } from "lucide-react";
-import { StationStatus, videoApi } from "@/lib/api";
+import { ago, StationStatus, videoApi } from "@/lib/api";
 
 interface CookiesPanelProps {
   cookies: StationStatus["cookies"] | undefined;
   detail: StationStatus["cookies_detail"] | undefined;
   onChanged: () => void;
 }
-
-const ago = (seconds: number) => {
-  const minutes = Math.round((Date.now() / 1000 - seconds) / 60);
-  if (minutes < 1) return "just now";
-  if (minutes < 60) return `${minutes} min ago`;
-  const hours = Math.round(minutes / 60);
-  return hours < 48 ? `${hours} h ago` : `${Math.round(hours / 24)} days ago`;
-};
 
 /** Explains the "confirm you're not a bot" block and takes a cookies.txt upload. */
 export function CookiesPanel({ cookies, detail, onChanged }: CookiesPanelProps) {
