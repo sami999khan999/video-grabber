@@ -9,6 +9,8 @@ import time
 import yt_dlp
 from yt_dlp.utils import DownloadCancelled
 
+from . import disguise  # noqa: F401  (unmasks HLS pieces dressed up as images)
+
 # Netscape-format cookies.txt from a logged-in browser. YouTube asks servers it doesn't trust
 # to "sign in to confirm you're not a bot"; cookies get past that. They can be uploaded from the
 # page (saved in DATA_DIR) or mounted and pointed to with COOKIES_FILE; an upload wins.
