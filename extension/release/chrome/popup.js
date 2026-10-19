@@ -60,6 +60,8 @@ const state = {
   // Headers and login that go with the current source (for a detected stream)
   sourceExtra: {},
   allSites: false,
+  // Jobs removed here that the server may still be listing
+  removing: new Set(),
 };
 
 // --- start-up ------------------------------------------------------------------
@@ -73,7 +75,12 @@ async function init() {
   $("open-options").addEventListener("click", () => chrome.runtime.openOptionsPage());
   $("open-station").addEventListener("click", openStation);
   $("grab").addEventListener("click", grab);
-  $("clear").addEventListener("click", () => run(VG.api("/jobs/clear/", { method: "POST" })));
+  $("clear").addEventListener("click", () =>
+    removeJobs(state.jobs.filter((j) => !VG.isActive(j)), VG.api("/jobs/clear/", { method: "POST" })),
+  );
+  $("clear-all").addEventListener("click", () =>
+    removeJobs(state.jobs, VG.api("/jobs/clear/", { method: "POST", body: { all: true } })),
+  );
   $("link-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const link = $("link").value.trim();
@@ -508,8 +515,9 @@ const LOOK = {
 
 function renderJobs() {
   const list = $("jobs");
-  const jobs = [...state.jobs].sort(VG.byPriority).slice(0, 30);
-  $("clear").disabled = state.offline || !state.jobs.some((j) => !VG.isActive(j));
+  const jobs = state.jobs.filter((j) => !state.removing.has(j.id)).sort(VG.byPriority).slice(0, 30);
+  $("clear").disabled = state.offline || !jobs.some((j) => !VG.isActive(j));
+  $("clear-all").disabled = state.offline || !jobs.length;
   if (state.offline) {
     list.replaceChildren(h("li", { class: "empty" }, "Server offline. Downloads show up here once it's back."));
     return;
@@ -550,11 +558,11 @@ function jobRow(job) {
       "div",
       { class: "job-actions" },
       job.status === "done" && button("Save file", "save", () => chrome.downloads.download({ url: `${state.server}/api/jobs/${job.id}/file/` })),
-      active && button("Cancel", "cancel", () => run(VG.api(`/jobs/${job.id}/cancel/`, { method: "POST" }))),
       (job.status === "error" || job.status === "cancelled") &&
         button("Retry", "retry", () =>
           run(VG.api(`/jobs/${job.id}/retry/`, { method: "POST" }).then((j) => chrome.runtime.sendMessage({ type: "track", ids: [j.id] }))),
         ),
+      button(active ? "Stop and remove" : "Remove", "cancel", () => removeJobs([job], VG.api(`/jobs/${job.id}/`, { method: "DELETE" }))),
     ),
     h("div", { class: "job-line" }, h("span", { class: `sticker ${tone}` }, tag), h("span", {}, job.label), h("span", { class: "info" }, info)),
     job.status === "error"
@@ -572,6 +580,18 @@ function jobRow(job) {
 
 function run(promise) {
   promise.catch((err) => renderSource({ error: err.message }));
+}
+
+// Hide the jobs right away; they come back only if the server refuses
+function removeJobs(jobs, promise) {
+  const ids = jobs.map((j) => j.id);
+  ids.forEach((id) => state.removing.add(id));
+  renderJobs();
+  promise.catch((err) => {
+    ids.forEach((id) => state.removing.delete(id));
+    renderJobs();
+    renderSource({ error: err.message });
+  });
 }
 
 init();

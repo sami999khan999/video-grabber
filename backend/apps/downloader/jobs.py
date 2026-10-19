@@ -238,17 +238,25 @@ class JobManager:
         return job
 
     def remove(self, job_id):
-        job = self.get(job_id)
-        if not job:
-            return False
-        self.cancel(job_id)
+        return self.remove_many([job_id]) == 1
+
+    def remove_many(self, job_ids):
+        """Drop jobs from the list at once, stopping any that still run."""
         with self._cond:
-            self._jobs.pop(job_id, None)
-        # A running job deletes its own folder when it notices the cancel
-        if job.status in FINISHED:
-            shutil.rmtree(job.dir, ignore_errors=True)
+            jobs = [self._jobs.pop(i) for i in job_ids if i in self._jobs]
+        if not jobs:
+            return 0
+        leftovers = []
+        for job in jobs:
+            job.cancel_event.set()
+            # A job still waiting in the pool never starts; a running one deletes
+            # its own folder when it notices the cancel
+            if job.status in FINISHED or (job.future and job.future.cancel()):
+                leftovers.append(job.dir)
         self._touch()
-        return True
+        if leftovers:
+            threading.Thread(target=_remove_dirs, args=(leftovers,), daemon=True).start()
+        return len(jobs)
 
     def retry(self, job_id):
         job = self.get(job_id)
@@ -266,12 +274,10 @@ class JobManager:
             "cookies": job.cookie_text,
         }])[0]
 
-    def clear_finished(self):
+    def clear(self, everything=False):
         with self._cond:
-            finished = [j for j in self._jobs.values() if j.status in FINISHED]
-        for job in finished:
-            self.remove(job.id)
-        return len(finished)
+            ids = [j.id for j in self._jobs.values() if everything or j.status in FINISHED]
+        return self.remove_many(ids)
 
     # --- download ----------------------------------------------------------
 
@@ -362,6 +368,9 @@ class JobManager:
                 cookie_text=None,
             )
             log("info", f"Job {job.id}: done", payload={"file": filepath})
+            # Removed while it was finishing up: nothing points at the file any more
+            if self.get(job.id) is None:
+                shutil.rmtree(job.dir, ignore_errors=True)
         except Exception as exc:
             shutil.rmtree(job.dir, ignore_errors=True)
             if job.cancel_event.is_set() or isinstance(exc, DownloadCancelled):
@@ -438,6 +447,11 @@ class JobManager:
                 ]
             for job_id in expired:
                 self.remove(job_id)
+
+
+def _remove_dirs(paths):
+    for path in paths:
+        shutil.rmtree(path, ignore_errors=True)
 
 
 _manager = None

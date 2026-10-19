@@ -154,8 +154,12 @@ export const videoApi = {
   cancel: (id: string) => request<Job>(`/jobs/${id}/cancel/`, { method: "POST" }, "Failed to cancel."),
   retry: (id: string) => request<Job>(`/jobs/${id}/retry/`, { method: "POST" }, "Failed to retry."),
   remove: (id: string) => request<void>(`/jobs/${id}/`, { method: "DELETE" }, "Failed to remove."),
-  clearFinished: () =>
-    request<{ removed: number }>("/jobs/clear/", { method: "POST" }, "Failed to clear."),
+  clear: (all = false) =>
+    request<{ removed: number }>(
+      "/jobs/clear/",
+      { method: "POST", body: JSON.stringify({ all }) },
+      "Failed to clear.",
+    ),
 
   uploadCookies: async (file: File) => {
     const body = new FormData();

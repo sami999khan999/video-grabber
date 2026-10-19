@@ -177,10 +177,14 @@ class JobRetryView(APIView):
 
 
 class JobClearView(APIView):
-    """POST /api/jobs/clear/ -> remove every finished, failed or cancelled job."""
+    """
+    POST /api/jobs/clear/ -> remove every finished, failed or cancelled job.
+    With {"all": true} running and queued jobs are stopped and removed too.
+    """
 
     def post(self, request):
-        return Response({"removed": get_manager().clear_finished()})
+        everything = request.data.get("all") is True
+        return Response({"removed": get_manager().clear(everything)})
 
 
 @require_GET

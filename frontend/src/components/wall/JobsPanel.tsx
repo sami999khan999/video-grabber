@@ -1,6 +1,6 @@
 "use client";
 
-import { Ban, Download, RotateCcw, Trash2, TriangleAlert, X } from "lucide-react";
+import { Download, ListX, RotateCcw, Trash2, TriangleAlert, X } from "lucide-react";
 import { byPriority, formatBytes, formatDuration, isActive, Job, saveJobFile } from "@/lib/api";
 
 const LOOK: Record<Job["status"], { text: string; tone: string }> = {
@@ -19,14 +19,14 @@ interface JobsPanelProps {
   jobs: Job[];
   autoSave: boolean;
   onAutoSave: (value: boolean) => void;
-  onCancel: (job: Job) => void;
   onRetry: (job: Job) => void;
   onRemove: (job: Job) => void;
   onClear: () => void;
+  onRemoveAll: () => void;
   onOpenCookies: () => void;
 }
 
-export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onCancel, onRetry, onRemove, onClear, onOpenCookies }: JobsPanelProps) {
+export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onRemove, onClear, onRemoveAll, onOpenCookies }: JobsPanelProps) {
   const list = (mode === "saved" ? jobs.filter((j) => j.status === "done") : jobs.filter((j) => j.status !== "done")).sort(byPriority);
   const finished = jobs.filter((j) => !isActive(j)).length;
 
@@ -50,9 +50,14 @@ export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onCancel, onRetry,
           />
           Auto-save when done
         </label>
-        <button className="pp-btn is-small ml-auto" onClick={onClear} disabled={finished === 0}>
-          <Trash2 size={14} strokeWidth={2.75} /> Clear finished
-        </button>
+        <div className="ml-auto flex gap-2">
+          <button className="pp-btn is-small" onClick={onClear} disabled={finished === 0}>
+            <Trash2 size={14} strokeWidth={2.75} /> Clear finished
+          </button>
+          <button className="pp-btn is-small" onClick={onRemoveAll} disabled={jobs.length === 0} title="Stop and remove every download">
+            <ListX size={14} strokeWidth={2.75} /> Remove all
+          </button>
+        </div>
       </div>
 
       {list.length === 0 ? (
@@ -65,7 +70,7 @@ export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onCancel, onRetry,
       ) : (
         <ul className="pp-scroll -mr-2 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-2">
           {list.map((job) => (
-            <JobRow key={job.id} job={job} onCancel={onCancel} onRetry={onRetry} onRemove={onRemove} onOpenCookies={onOpenCookies} />
+            <JobRow key={job.id} job={job} onRetry={onRetry} onRemove={onRemove} onOpenCookies={onOpenCookies} />
           ))}
         </ul>
       )}
@@ -75,13 +80,11 @@ export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onCancel, onRetry,
 
 function JobRow({
   job,
-  onCancel,
   onRetry,
   onRemove,
   onOpenCookies,
 }: {
   job: Job;
-  onCancel: (job: Job) => void;
   onRetry: (job: Job) => void;
   onRemove: (job: Job) => void;
   onOpenCookies: () => void;
@@ -132,21 +135,14 @@ function JobRow({
                   <Download size={15} strokeWidth={3} />
                 </button>
               )}
-              {active && (
-                <button className="pp-btn is-icon" onClick={() => onCancel(job)} aria-label="Cancel" title="Cancel">
-                  <Ban size={15} strokeWidth={2.75} />
-                </button>
-              )}
               {(job.status === "error" || job.status === "cancelled") && (
                 <button className="pp-btn is-icon" onClick={() => onRetry(job)} aria-label="Retry" title="Retry">
                   <RotateCcw size={15} strokeWidth={2.75} />
                 </button>
               )}
-              {!active && (
-                <button className="pp-btn is-icon" onClick={() => onRemove(job)} aria-label="Remove" title="Remove">
-                  <X size={15} strokeWidth={2.75} />
-                </button>
-              )}
+              <button className="pp-btn is-icon" onClick={() => onRemove(job)} aria-label="Remove" title={active ? "Stop and remove" : "Remove"}>
+                <X size={15} strokeWidth={2.75} />
+              </button>
             </div>
           </div>
 

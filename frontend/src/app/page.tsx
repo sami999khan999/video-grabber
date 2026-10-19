@@ -63,8 +63,13 @@ export default function Home() {
   const [autoSave, changeAutoSave] = useAutoSave();
 
   const { jobs: serverJobs, connected, track } = useJobs(autoSave);
+  // Jobs being removed disappear right away, without waiting for the server to confirm
+  const [removing, setRemoving] = useState<Set<string>>(new Set());
   // Newest first
-  const jobs = useMemo(() => [...serverJobs].sort((a, b) => b.created_at - a.created_at), [serverJobs]);
+  const jobs = useMemo(
+    () => serverJobs.filter((j) => !removing.has(j.id)).sort((a, b) => b.created_at - a.created_at),
+    [serverJobs, removing],
+  );
   const { data: status } = useQuery({ queryKey: ["status"], queryFn: videoApi.status });
 
   const tune = useMutation({
@@ -107,6 +112,17 @@ export default function Home() {
         setActionError(null);
       })
       .catch((err: Error) => setActionError(err.message));
+  };
+
+  const remove = (picked: Job[], action: Promise<unknown>) => {
+    const ids = picked.map((j) => j.id);
+    setRemoving((s) => new Set([...s, ...ids]));
+    action
+      .then(() => setActionError(null))
+      .catch((err: Error) => {
+        setRemoving((s) => new Set([...s].filter((id) => !ids.includes(id))));
+        setActionError(err.message);
+      });
   };
 
   const toggle = (set: (fn: (s: Set<string>) => Set<string>) => void) => (id: string) =>
@@ -229,10 +245,10 @@ export default function Home() {
                 jobs={jobs}
                 autoSave={autoSave}
                 onAutoSave={changeAutoSave}
-                onCancel={(job) => run(videoApi.cancel(job.id))}
                 onRetry={(job) => run(videoApi.retry(job.id), true)}
-                onRemove={(job) => run(videoApi.remove(job.id))}
-                onClear={() => run(videoApi.clearFinished())}
+                onRemove={(job) => remove([job], videoApi.remove(job.id))}
+                onClear={() => remove(jobs.filter((j) => !isActive(j)), videoApi.clear())}
+                onRemoveAll={() => remove(jobs, videoApi.clear(true))}
                 onOpenCookies={() => setView("auth")}
               />
             )}

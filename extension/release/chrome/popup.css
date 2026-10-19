@@ -582,6 +582,11 @@ main {
   margin-bottom: 8px;
 }
 
+.head-actions {
+  display: flex;
+  gap: 6px;
+}
+
 .jobs {
   margin: 0;
   padding: 0;
