@@ -43,6 +43,8 @@ export interface PlaylistInfo {
   entries: PlaylistEntry[];
   /** Id of the video the link was playing, when it was a video inside this playlist */
   current?: string;
+  /** Endless lists (history, feeds, Mixes) come 100 at a time: where the next page starts */
+  next_start?: number | null;
 }
 
 export type SourceInfo = VideoInfo | PlaylistInfo;
@@ -146,10 +148,10 @@ const request = async <T>(path: string, init: RequestInit, fallback: string): Pr
 export const videoApi = {
   status: () => request<StationStatus>("/status/", { method: "GET" }, "Station offline."),
 
-  fetchInfo: (url: string) =>
+  fetchInfo: (url: string, start?: number) =>
     request<SourceInfo>(
       "/info/",
-      { method: "POST", body: JSON.stringify({ url: url.trim() }) },
+      { method: "POST", body: JSON.stringify({ url: url.trim(), start }) },
       "Failed to fetch video info.",
     ),
 

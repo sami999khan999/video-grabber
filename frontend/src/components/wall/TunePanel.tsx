@@ -26,6 +26,9 @@ interface TunePanelProps {
   onPreset: (id: string) => void;
   /** Look up just one video of the playlist instead */
   onTuneVideo: (url: string) => void;
+  /** Fetch the next page of an endless list (history, feeds, Mixes) */
+  onLoadMore: () => void;
+  loadingMore: boolean;
 }
 
 export function TunePanel(props: TunePanelProps) {
@@ -142,10 +145,12 @@ function PlaylistView({
   preset,
   onPreset,
   onTuneVideo,
+  onLoadMore,
+  loadingMore,
 }: { info: PlaylistInfo } & TunePanelProps) {
   const meta: [typeof User, string][] = [];
   if (info.uploader) meta.push([User, info.uploader]);
-  meta.push([ListVideo, `${info.entries.length} videos`]);
+  meta.push([ListVideo, `${info.entries.length}${info.next_start ? "+" : ""} videos`]);
   const allOn = selectedEntries.size === info.entries.length;
 
   return (
@@ -215,6 +220,13 @@ function PlaylistView({
             </li>
           );
         })}
+        {info.next_start && (
+          <li>
+            <button className="pp-btn is-small w-full justify-center" onClick={onLoadMore} disabled={loadingMore}>
+              {loadingMore ? "Loading…" : "Load more"}
+            </button>
+          </li>
+        )}
       </ul>
     </div>
   );

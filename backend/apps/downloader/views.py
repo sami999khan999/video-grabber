@@ -80,9 +80,10 @@ class CookiesView(APIView):
 class VideoInfoView(APIView):
     """
     POST /api/info/
-    Body: { "url": "https://..." }
+    Body: { "url": "https://...", "start"?: 101 }
     Returns video metadata (title, thumbnail, duration, formats),
-    or for a playlist link its title and entries.
+    or for a playlist link its title and entries. Endless lists (Mixes, YouTube feeds) come
+    100 at a time: "next_start" is where the next page begins (null at the end).
     """
 
     def post(self, request):
@@ -97,7 +98,11 @@ class VideoInfoView(APIView):
             # The browser extension may pass the page's headers and (if the user allows it)
             # their login for that site
             cookie_text = request_cookies(request.data)
-            info = extract_video_info(url, headers=clean_headers(request.data.get("headers")), cookie_text=cookie_text)
+            try:
+                start = max(1, int(request.data.get("start") or 1))
+            except (TypeError, ValueError):
+                start = 1
+            info = extract_video_info(url, headers=clean_headers(request.data.get("headers")), cookie_text=cookie_text, start=start)
             return Response(info, status=status.HTTP_200_OK)
         except Exception as e:
             return Response(

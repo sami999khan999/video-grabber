@@ -14,42 +14,45 @@ from .ytdlp import extract, mix_video_url, playing_playlist
 # doesn't send the site another round of requests
 INFO_CACHE_SECONDS = float(os.environ.get("INFO_CACHE_MINUTES", "10")) * 60
 # Mixes and YouTube's feeds (history, home, subscriptions…) never end: yt-dlp would page
-# through years of history before answering. Take the newest this many
+# through years of history before answering. They come this many at a time ("Load more")
 ENDLESS_LIST_LENGTH = 100
 _info_cache = {}
 _info_lock = threading.Lock()
 
 
-def extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
+def extract_video_info(url: str, headers=None, cookie_text=None, start=1) -> dict:
     """
     Extract video metadata (title, thumbnail, duration, available formats)
-    without downloading the video. Playlist links return the list of entries.
+    without downloading the video. Playlist links return the list of entries; endless ones
+    (Mixes, YouTube feeds) a page of them from entry `start` (1-based), with `next_start`
+    set while there may be more.
     """
     if cookie_text:
         # Someone's login was used: the answer is theirs, so it isn't cached
-        return _extract_video_info(url, headers, cookie_text)
+        return _extract_video_info(url, headers, cookie_text, start)
     now = time.time()
+    key = (url, start)
     with _info_lock:
-        cached = _info_cache.get(url)
+        cached = _info_cache.get(key)
         if cached and now - cached[0] < INFO_CACHE_SECONDS:
             return cached[1]
-    result = _extract_video_info(url, headers)
+    result = _extract_video_info(url, headers, start=start)
     with _info_lock:
         # Keep the cache small: drop expired entries, then the oldest
         for key in [k for k, (t, _) in _info_cache.items() if now - t >= INFO_CACHE_SECONDS]:
             del _info_cache[key]
         if len(_info_cache) >= 200:
             del _info_cache[min(_info_cache, key=lambda k: _info_cache[k][0])]
-        _info_cache[url] = (now, result)
+        _info_cache[key] = (now, result)
     return result
 
 
-def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
-    log("info", f"Extracting info for URL: {url}")
+def _extract_video_info(url: str, headers=None, cookie_text=None, start=1) -> dict:
+    log("info", f"Extracting info for URL: {url}" + (f" from entry {start}" if start > 1 else ""))
     # A video played inside a playlist or Mix brings the whole list, that video marked
     playing = playing_playlist(url)
     endless = (playing and "list=RD" in url) or _is_youtube_feed(url)
-    cap = {"playlistend": ENDLESS_LIST_LENGTH} if endless else {}
+    cap = {"playliststart": start, "playlistend": start + ENDLESS_LIST_LENGTH - 1} if endless else {}
     info = extract(
         url,
         headers=headers,
@@ -68,9 +71,13 @@ def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
     })
 
     if info.get("_type") == "playlist" or info.get("entries") is not None:
-        result = _playlist_info(info, url)
+        # A later page that comes back empty is simply the end of the list
+        result = _playlist_info(info, url, allow_empty=start > 1)
         if playing:
             result["current"] = playing
+        # A full page means there may be more (counted before repeats were dropped)
+        full = endless and len(info.get("entries") or []) >= ENDLESS_LIST_LENGTH
+        result["next_start"] = start + ENDLESS_LIST_LENGTH if full else None
         return result
 
     formats = info.get("formats") or []
@@ -225,7 +232,7 @@ def _is_youtube_feed(url: str) -> bool:
     return parsed.path in ("", "/") or parsed.path.startswith("/feed/")
 
 
-def _playlist_info(info: dict, url: str) -> dict:
+def _playlist_info(info: dict, url: str, allow_empty=False) -> dict:
     entries = []
     seen = set()
     for entry in info.get("entries") or []:
@@ -261,7 +268,7 @@ def _playlist_info(info: dict, url: str) -> dict:
             "uploader": entry.get("uploader") or entry.get("channel") or "",
         })
 
-    if not entries:
+    if not entries and not allow_empty:
         host = (urlparse(url).hostname or "").lower()
         if host == "youtube.com" or host.endswith(".youtube.com"):
             raise ValueError(

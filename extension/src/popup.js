@@ -385,7 +385,7 @@ function renderPlaylist(box, source) {
   box.append(
     h("div", { class: "thumb", style: `background-image:${safeImage(source.thumbnail)}` }, h("span", { class: "sticker teal" }, "Playlist")),
     h("h1", { class: "title", title: source.title }, source.title),
-    h("p", { class: "meta" }, [source.uploader, `${source.entries.length} videos`].filter(Boolean).join(" · ")),
+    h("p", { class: "meta" }, [source.uploader, `${source.entries.length}${source.next_start ? "+" : ""} videos`].filter(Boolean).join(" · ")),
     // box.append would print a missing button as the text "undefined"
     source.current
       ? h(
@@ -449,7 +449,35 @@ function renderPlaylist(box, source) {
         ),
       ),
     ),
+    // History, feeds and Mixes come 100 at a time
+    source.next_start ? h("button", { class: "btn small load-more", onclick: (e) => loadMore(e.currentTarget) }, "Load more") : "",
   );
+}
+
+/** Fetch the next page of an endless list and add it below, selected like the rest. */
+async function loadMore(button) {
+  const source = state.source;
+  button.disabled = true;
+  button.textContent = "Loading…";
+  try {
+    const more = await VG.api("/info/", { method: "POST", body: { url: source.webpage_url, start: source.next_start, ...state.sourceExtra } });
+    if (state.source !== source) return; // tuned to something else meanwhile
+    const known = new Set(source.entries.map((e) => e.id));
+    const added = more.entries.filter((e) => !known.has(e.id));
+    source.entries.push(...added);
+    added.forEach((e) => state.selectedEntries.add(e.id));
+    source.next_start = more.next_start;
+    // Redraw without losing the place in the list
+    const scrolled = $("source").querySelector(".entries")?.scrollTop ?? 0;
+    renderSource({ source });
+    const list = $("source").querySelector(".entries");
+    if (list) list.scrollTop = scrolled;
+    updateGrab();
+  } catch (err) {
+    button.disabled = false;
+    button.textContent = "Load more";
+    button.title = err.message;
+  }
 }
 
 // --- grab ---------------------------------------------------------------------

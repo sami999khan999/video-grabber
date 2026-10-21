@@ -241,7 +241,7 @@ Base URL `/api`, JSON bodies.
 | Method | Path | Body | Does |
 |---|---|---|---|
 | `GET` | `/status/` | | `{ max_parallel, cookies }` |
-| `POST` | `/info/` | `{ url }` | Video formats, or playlist entries (`kind` says which) |
+| `POST` | `/info/` | `{ url, start? }` | Video formats, or playlist entries (`kind` says which). Endless lists (YouTube history and feeds, Mixes) come 100 at a time: pass the returned `next_start` as `start` for the next page |
 | `GET` | `/jobs/` | | All jobs |
 | `POST` | `/jobs/` | `{ items: [{ url, format_id, label?, title?, thumbnail?, group?, headers?, cookies? }] }` | Queues one job per item |
 | `GET` | `/jobs/stream/` | | Server-Sent Events: `{ jobs: [...] }` on every change |

@@ -87,6 +87,24 @@ export default function Home() {
     },
   });
 
+  // The next page of an endless list (history, feeds, Mixes), added below and selected like the rest
+  const loadMore = useMutation({
+    mutationFn: async () => {
+      if (source?.kind !== "playlist" || !source.next_start) throw new Error("Nothing more to load.");
+      return { list: source, more: await videoApi.fetchInfo(source.webpage_url, source.next_start) };
+    },
+    onSuccess: ({ list, more }) => {
+      if (more.kind !== "playlist") return;
+      const known = new Set(list.entries.map((e) => e.id));
+      const added = more.entries.filter((e) => !known.has(e.id));
+      // Tuned to something else meanwhile: leave the new source alone
+      setSource((current) => (current === list ? { ...list, entries: [...list.entries, ...added], next_start: more.next_start } : current));
+      setSelectedEntries((s) => new Set([...s, ...added.map((e) => e.id)]));
+      setActionError(null);
+    },
+    onError: (err: Error) => setActionError(err.message),
+  });
+
   // /?url=... (from the browser extension) opens straight on that link
   const { mutate: tuneLink } = tune;
   useEffect(() => {
@@ -241,6 +259,8 @@ export default function Home() {
                   setUrl(link);
                   tune.mutate(link);
                 }}
+                onLoadMore={() => loadMore.mutate()}
+                loadingMore={loadMore.isPending}
               />
             )}
             {(view === "queue" || view === "saved") && (
