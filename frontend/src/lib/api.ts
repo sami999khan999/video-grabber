@@ -41,6 +41,8 @@ export interface PlaylistInfo {
   uploader: string;
   webpage_url: string;
   entries: PlaylistEntry[];
+  /** Id of the video the link was playing, when it was a video inside this playlist */
+  current?: string;
 }
 
 export type SourceInfo = VideoInfo | PlaylistInfo;

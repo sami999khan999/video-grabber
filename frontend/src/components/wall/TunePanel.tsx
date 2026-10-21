@@ -24,6 +24,8 @@ interface TunePanelProps {
   onToggleAllEntries: () => void;
   preset: string;
   onPreset: (id: string) => void;
+  /** Look up just one video of the playlist instead */
+  onTuneVideo: (url: string) => void;
 }
 
 export function TunePanel(props: TunePanelProps) {
@@ -139,6 +141,7 @@ function PlaylistView({
   onToggleAllEntries,
   preset,
   onPreset,
+  onTuneVideo,
 }: { info: PlaylistInfo } & TunePanelProps) {
   const meta: [typeof User, string][] = [];
   if (info.uploader) meta.push([User, info.uploader]);
@@ -149,6 +152,15 @@ function PlaylistView({
     <div className="flex min-h-0 flex-col gap-4">
       <Heading kicker="Playlist" title={info.title} tone="is-teal" />
       <Meta items={meta} />
+      {info.current && (
+        <button
+          className="pp-btn is-small self-start"
+          onClick={() => onTuneVideo(`https://www.youtube.com/watch?v=${info.current}`)}
+          title="Grab only the video that was playing, with the full choice of qualities"
+        >
+          <Film size={14} strokeWidth={2.75} /> Just the playing video
+        </button>
+      )}
 
       <div className="flex flex-wrap items-center gap-2" role="radiogroup" aria-label="Quality for every video" title="Each video gets the best it has, up to this">
         {PRESETS.map((p) => (
@@ -187,7 +199,12 @@ function PlaylistView({
                   style={entry.thumbnail ? { backgroundImage: `url("${entry.thumbnail}")` } : undefined}
                 />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[14px] font-bold">{entry.title}</span>
+                  <span className="flex min-w-0 items-center gap-2">
+                    {entry.id === info.current && (
+                      <span className="pp-sticker is-yellow shrink-0 !rotate-0 !px-1.5 !py-0 !text-[10px] !shadow-none">Now playing</span>
+                    )}
+                    <span className="truncate text-[14px] font-bold">{entry.title}</span>
+                  </span>
                   <span className="block text-[12px] font-semibold text-[var(--muted)]">
                     {entry.duration ? formatDuration(entry.duration) : "--:--"}
                     {entry.uploader ? ` · ${entry.uploader}` : ""}

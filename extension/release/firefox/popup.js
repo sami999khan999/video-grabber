@@ -385,6 +385,16 @@ function renderPlaylist(box, source) {
     h("div", { class: "thumb", style: `background-image:${safeImage(source.thumbnail)}` }, h("span", { class: "sticker teal" }, "Playlist")),
     h("h1", { class: "title", title: source.title }, source.title),
     h("p", { class: "meta" }, [source.uploader, `${source.entries.length} videos`].filter(Boolean).join(" · ")),
+    source.current &&
+      h(
+        "button",
+        {
+          class: "btn small just-playing",
+          title: "Grab only the video that was playing, with the full choice of qualities",
+          onclick: () => tune(`https://www.youtube.com/watch?v=${source.current}`),
+        },
+        "Just the playing video",
+      ),
     h("div", { class: "group-label" }, "Quality for every video"),
     h(
       "div",
@@ -429,6 +439,7 @@ function renderPlaylist(box, source) {
               },
             },
             h("div", { class: "mini", style: `background-image:${safeImage(entry.thumbnail)}` }),
+            entry.id === source.current && h("b", { class: "sticker yellow now" }, "Now playing"),
             h("span", {}, `${i + 1}. ${entry.title}`),
             h("div", { class: "check" }),
           ),

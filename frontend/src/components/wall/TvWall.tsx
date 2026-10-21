@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Music2, Pause, Play, TriangleAlert, Zap } from "lucide-react";
-import { ago, byPriority, canPause, formatBytes, formatDuration, isActive, Job, StationStatus } from "@/lib/api";
+import { Check, Music2, Play, TriangleAlert } from "lucide-react";
+import { ago, byPriority, formatBytes, formatDuration, isActive, Job, StationStatus } from "@/lib/api";
 
 type Filler = "static" | "bars" | "off" | { text: string; bg: string; color?: string; icon?: "play" | "music" };
 /** A set that reads out the station instead of showing a download; its filler is the idle look */
@@ -59,12 +59,10 @@ interface TvWallProps {
   live: boolean;
   status?: StationStatus;
   onPickJob: (job: Job) => void;
-  onPrioritize: (job: Job) => void;
-  onPause: (job: Job) => void;
   onOpen: (view: "queue" | "saved" | "auth") => void;
 }
 
-export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, onPrioritize, onPause, onOpen }: TvWallProps) {
+export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, onOpen }: TvWallProps) {
   // Live downloads get the most visible sets
   const ordered = [...jobs].sort(byPriority);
   const shown = ordered.slice(0, JOB_ORDER.length);
@@ -87,7 +85,7 @@ export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, on
             transform: slot.rot ? `rotate(${slot.rot}deg)` : undefined,
           }}
         >
-          <div className="pp-bob relative h-full w-full" style={{ animationDelay: `${(slot.x % 7) * -0.13}s` }}>
+          <div className="pp-bob h-full w-full" style={{ animationDelay: `${(slot.x % 7) * -0.13}s` }}>
             {slot.kind === "speaker" ? (
               <Speaker cones={slot.cones} />
             ) : slot.gauge ? (
@@ -100,8 +98,6 @@ export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, on
                 job={jobBySlot.get(slot.id)}
                 extra={slot.id === JOB_ORDER[JOB_ORDER.length - 1] && overflow > 0 ? overflow : 0}
                 onPickJob={onPickJob}
-                onPrioritize={onPrioritize}
-                onPause={onPause}
               />
             )}
           </div>
@@ -284,15 +280,11 @@ function SmallTv({
   job,
   extra,
   onPickJob,
-  onPrioritize,
-  onPause,
 }: {
   slot: Slot;
   job?: Job;
   extra: number;
   onPickJob: (job: Job) => void;
-  onPrioritize: (job: Job) => void;
-  onPause: (job: Job) => void;
 }) {
   if (!job) {
     return (
@@ -305,95 +297,57 @@ function SmallTv({
   const look = JOB_LOOK[job.status];
   const active = isActive(job);
   const showPicture = job.thumbnail && job.status !== "error" && job.status !== "cancelled";
-
-  const paused = job.status === "paused";
+  const waiting = job.status === "queued" || job.status === "paused";
 
   return (
-    <>
-      <TvBody
-        body={slot.body}
-        led={{ color: look.led, blink: look.blink }}
-        onClick={() => onPickJob(job)}
-        label={`${job.title || job.url}: ${look.tag}${active ? ` ${Math.floor(job.progress)}%` : ""}`}
-      >
-        <div key={job.id} className="pp-switch pp-screen-fill">
-          {showPicture ? (
-            <div
-              className="pp-screen-fill pp-thumb"
-              style={{
-                backgroundImage: `url("${job.thumbnail}")`,
-                filter: job.status === "queued" || paused ? "grayscale(1) brightness(0.55)" : undefined,
-              }}
-            />
-          ) : (
-            <div className={`pp-screen-fill ${job.status === "cancelled" ? "pp-off" : "pp-static opacity-60"}`} />
-          )}
-          <div className="pp-screen-fill bg-gradient-to-t from-black/85 via-black/10 to-black/30" />
+    <TvBody
+      body={slot.body}
+      led={{ color: look.led, blink: look.blink }}
+      onClick={() => onPickJob(job)}
+      label={`${job.title || job.url}: ${look.tag}${active ? ` ${Math.floor(job.progress)}%` : ""}`}
+    >
+      <div key={job.id} className="pp-switch pp-screen-fill">
+        {showPicture ? (
+          <div
+            className="pp-screen-fill pp-thumb"
+            style={{
+              backgroundImage: `url("${job.thumbnail}")`,
+              filter: waiting ? "grayscale(1) brightness(0.55)" : undefined,
+            }}
+          />
+        ) : (
+          <div className={`pp-screen-fill ${job.status === "cancelled" ? "pp-off" : "pp-static opacity-60"}`} />
+        )}
+        <div className="pp-screen-fill bg-gradient-to-t from-black/85 via-black/10 to-black/30" />
 
-          <div className="absolute inset-[6%] z-2 flex flex-col justify-between">
-            <div className="flex items-start justify-between gap-1">
-              <span className={`pp-sticker ${look.tone} !px-[0.5em] !py-0 !text-[clamp(7px,8cqh,13px)] !shadow-[2px_2px_0_#08090b]`}>{look.tag}</span>
-              {job.status === "done" && <Check className="h-[22cqh] w-[22cqh] rounded-full border-2 border-black bg-[var(--lime)] p-[2%] text-black" strokeWidth={4} />}
-              {job.status === "error" && <TriangleAlert className="h-[22cqh] w-[22cqh] text-[var(--red)] drop-shadow-[0_2px_0_#000]" strokeWidth={3} />}
-            </div>
-
-            {active && job.status !== "queued" && (
-              <div className="pp-screen-big text-center text-white drop-shadow-[0_3px_0_#000]">{Math.floor(job.progress)}%</div>
-            )}
-
-            <div>
-              <div className="pp-screen-small mb-[3%] truncate text-white drop-shadow-[0_1px_0_#000]">{job.title || job.url}</div>
-              {job.status !== "error" && job.status !== "cancelled" && (
-                <div className={`pp-screen-bar ${job.status === "done" ? "is-done" : ""} ${job.status === "merging" || job.status === "processing" ? "is-merging" : ""}`}>
-                  <span style={{ width: `${job.status === "merging" || job.status === "processing" ? 100 : job.progress}%` }} />
-                </div>
-              )}
-            </div>
+        <div className="absolute inset-[6%] z-2 flex flex-col justify-between">
+          <div className="flex items-start justify-between gap-1">
+            <span className={`pp-sticker ${look.tone} !px-[0.5em] !py-0 !text-[clamp(7px,8cqh,13px)] !shadow-[2px_2px_0_#08090b]`}>{look.tag}</span>
+            {job.status === "done" && <Check className="h-[22cqh] w-[22cqh] rounded-full border-2 border-black bg-[var(--lime)] p-[2%] text-black" strokeWidth={4} />}
+            {job.status === "error" && <TriangleAlert className="h-[22cqh] w-[22cqh] text-[var(--red)] drop-shadow-[0_2px_0_#000]" strokeWidth={3} />}
           </div>
 
-          {extra > 0 && (
-            <div className="absolute inset-0 z-3 flex items-center justify-center bg-black/70">
-              <span className="pp-screen-big text-[var(--yellow)]">+{extra}</span>
-            </div>
+          {active && job.status !== "queued" && (
+            <div className="pp-screen-big text-center text-white drop-shadow-[0_3px_0_#000]">{Math.floor(job.progress)}%</div>
           )}
-        </div>
-      </TvBody>
-      {/* Next to the set, not inside it: the set itself is already a button */}
-      {extra === 0 && (canPause(job) || paused) && (
-        <div className="absolute right-[1%] top-[1%] z-4 flex h-[24%] min-h-6 gap-[0.3em]">
-          <SetButton
-            on={paused}
-            onClick={() => onPause(job)}
-            label={paused ? "Resume" : "Pause"}
-            icon={paused ? <Play className="h-[55%] w-[55%]" strokeWidth={3} fill="currentColor" /> : <Pause className="h-[55%] w-[55%]" strokeWidth={3} />}
-          />
-          {canPause(job) && (
-            <SetButton
-              on={job.priority}
-              onClick={() => onPrioritize(job)}
-              label={job.priority ? "Stop prioritizing" : "Prioritize: download this one first, slow the others down"}
-              icon={<Zap className="h-[55%] w-[55%]" strokeWidth={3} fill={job.priority ? "currentColor" : "none"} />}
-            />
-          )}
-        </div>
-      )}
-    </>
-  );
-}
 
-function SetButton({ on, onClick, label, icon }: { on: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
-  return (
-    <button
-      className={`flex aspect-square h-full items-center justify-center rounded-full border-2 border-[var(--ink)] shadow-[2px_2px_0_#08090b] ${
-        on ? "bg-[var(--yellow)] text-[#08090b]" : "bg-[#1d232b] text-white hover:text-[var(--yellow)]"
-      }`}
-      onClick={onClick}
-      aria-label={label}
-      aria-pressed={on}
-      title={label}
-    >
-      {icon}
-    </button>
+          <div>
+            <div className="pp-screen-small mb-[3%] truncate text-white drop-shadow-[0_1px_0_#000]">{job.title || job.url}</div>
+            {job.status !== "error" && job.status !== "cancelled" && (
+              <div className={`pp-screen-bar ${job.status === "done" ? "is-done" : ""} ${job.status === "merging" || job.status === "processing" ? "is-merging" : ""}`}>
+                <span style={{ width: `${job.status === "merging" || job.status === "processing" ? 100 : job.progress}%` }} />
+              </div>
+            )}
+          </div>
+        </div>
+
+        {extra > 0 && (
+          <div className="absolute inset-0 z-3 flex items-center justify-center bg-black/70">
+            <span className="pp-screen-big text-[var(--yellow)]">+{extra}</span>
+          </div>
+        )}
+      </div>
+    </TvBody>
   );
 }
 

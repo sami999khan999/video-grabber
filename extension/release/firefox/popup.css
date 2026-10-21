@@ -302,6 +302,13 @@ main {
   background: #0a0c0f center / cover no-repeat;
 }
 
+.entry .now {
+  flex-shrink: 0;
+  padding: 0 4px;
+  box-shadow: none;
+  font-size: 9px;
+}
+
 .entry span {
   flex: 1;
   min-width: 0;
@@ -512,6 +519,10 @@ main {
   background: linear-gradient(180deg, #ffe680, #ffc61a);
   color: var(--ink);
   box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.6), 0 3px 0 var(--ink);
+}
+
+.btn.just-playing {
+  margin-top: 6px;
 }
 
 .btn.small {

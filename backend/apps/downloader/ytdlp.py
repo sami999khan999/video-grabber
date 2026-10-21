@@ -162,6 +162,20 @@ def mix_video_url(url: str):
     return f"https://www.youtube.com/watch?v={match.group(1)}" if match else None
 
 
+def playing_playlist(url: str):
+    """
+    The video id of a YouTube watch link played inside a real playlist (…?v=ID&list=PL…), or
+    None. Mixes don't count: they are endless and made up on the spot.
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    query = parse_qs(parsed.query)
+    playlist = (query.get("list") or [""])[0]
+    if not (host == "youtube.com" or host.endswith(".youtube.com")) or not playlist or playlist.startswith("RD"):
+        return None
+    return (query.get("v") or [None])[0]
+
+
 # Headers the browser extension may pass on: many sites only serve a video to requests that
 # look like they come from the page playing it
 ALLOWED_HEADERS = {"referer": "Referer", "origin": "Origin", "user-agent": "User-Agent"}
@@ -210,7 +224,12 @@ def extract(url: str, download: bool = False, headers=None, cookie_text=None, **
     for with_cookies in attempts:
         try:
             with yt_dlp.YoutubeDL(_options(with_cookies, extra)) as ydl:
-                return ydl.extract_info(url, download=download)
+                info = ydl.extract_info(url, download=download)
+            # YouTube's history, feeds and private playlists come back empty, not refused,
+            # to a visitor who isn't signed in
+            if not with_cookies and len(attempts) > 1 and info.get("_type") == "playlist" and not info.get("entries"):
+                continue
+            return info
         except DownloadCancelled:
             raise
         except Exception as exc:

@@ -205,8 +205,6 @@ export default function Home() {
               live={live}
               status={status}
               onPickJob={(job) => setView(job.status === "done" ? "saved" : "queue")}
-              onPrioritize={(job) => run(videoApi.prioritize(job.id, !job.priority))}
-              onPause={(job) => run(job.status === "paused" ? videoApi.resume(job.id) : videoApi.pause(job.id))}
               onOpen={setView}
             />
           </div>
@@ -239,6 +237,10 @@ export default function Home() {
                 }
                 preset={preset}
                 onPreset={setPreset}
+                onTuneVideo={(link) => {
+                  setUrl(link);
+                  tune.mutate(link);
+                }}
               />
             )}
             {(view === "queue" || view === "saved") && (

@@ -1,12 +1,13 @@
 import os
 import threading
 import time
+from urllib.parse import urlparse
 
 from yt_dlp.utils import get_compatible_ext
 
 from common.utils.log import log
 
-from .ytdlp import extract, mix_video_url
+from .ytdlp import extract, mix_video_url, playing_playlist
 
 
 # Lookups are reused for a while, so opening the same link again (web app, extension popup)
@@ -42,13 +43,15 @@ def extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
 
 def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
     log("info", f"Extracting info for URL: {url}")
+    # A video played inside a playlist brings the whole playlist (that video marked);
+    # any other watch link with a playlist id (a Mix) means the single video
+    playing = playing_playlist(url)
     info = extract(
         url,
         headers=headers,
         cookie_text=cookie_text,
         skip_download=True,
-        # A watch link that also carries a playlist id means the single video
-        noplaylist=True,
+        noplaylist=not playing,
         # Playlists are listed without resolving every entry (fast)
         extract_flat="in_playlist",
     )
@@ -60,7 +63,10 @@ def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
     })
 
     if info.get("_type") == "playlist" or info.get("entries") is not None:
-        return _playlist_info(info, url)
+        result = _playlist_info(info, url)
+        if playing:
+            result["current"] = playing
+        return result
 
     formats = info.get("formats") or []
     duration = info.get("duration") or 0
@@ -235,6 +241,16 @@ def _playlist_info(info: dict, url: str) -> dict:
             or (thumbnails[-1].get("url") if thumbnails else ""),
             "uploader": entry.get("uploader") or entry.get("channel") or "",
         })
+
+    if not entries:
+        host = (urlparse(url).hostname or "").lower()
+        if host == "youtube.com" or host.endswith(".youtube.com"):
+            raise ValueError(
+                "Nothing to grab here. YouTube shows your history, feeds and private playlists "
+                "only to a signed-in user, so send your YouTube login (extension, Settings) or "
+                "upload a cookies.txt in the Cookies tab, then try again."
+            )
+        raise ValueError("This playlist is empty.")
 
     thumbnails = info.get("thumbnails") or []
     thumbnail = info.get("thumbnail") or (thumbnails[-1].get("url") if thumbnails else "")
