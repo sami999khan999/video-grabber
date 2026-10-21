@@ -5,7 +5,6 @@ import tempfile
 import threading
 import time
 import uuid
-from concurrent.futures import ThreadPoolExecutor
 
 from yt_dlp.utils import DownloadCancelled
 
@@ -14,8 +13,11 @@ from common.utils.log import log
 from .politeness import gate, polite_options, retry_pause
 from .ytdlp import clean_headers, extract
 
-# Jobs live in memory, so the app must run as a single process (threads are fine)
-MAX_PARALLEL_DOWNLOADS = int(os.environ.get("MAX_PARALLEL_DOWNLOADS", "3"))
+# Jobs live in memory, so the app must run as a single process (threads are fine).
+# 0 starts every download straight away; a number makes the rest wait (priority ones first)
+MAX_PARALLEL_DOWNLOADS = max(0, int(os.environ.get("MAX_PARALLEL_DOWNLOADS", "0")))
+# While one download has priority, every other one is held to this speed so it gets the bandwidth
+BACKGROUND_KBPS = float(os.environ.get("BACKGROUND_KBPS", "256"))
 # HLS/DASH videos come in many small pieces; fetching several at once is what makes them fast
 FRAGMENT_PARALLEL = max(1, int(os.environ.get("FRAGMENT_PARALLEL", "8")))
 # Plain files are asked for in chunks of this size: servers that throttle one long request
@@ -131,8 +133,11 @@ class Job:
         self.notice = None
         self.created_at = time.time()
         self.finished_at = None
+        # The one download the user wants first: it skips the line and the others slow down
+        self.priority = False
         self.cancel_event = threading.Event()
-        self.future = None
+        # (time, bytes) the background speed limit counts from
+        self.throttle_mark = None
 
     @property
     def dir(self):
@@ -159,6 +164,7 @@ class Job:
             "filesize": self.filesize,
             "error": self.error,
             "notice": self.notice,
+            "priority": self.priority,
             "created_at": self.created_at,
             "finished_at": self.finished_at,
         }
@@ -169,9 +175,9 @@ class JobManager:
         self._jobs = {}
         self._cond = threading.Condition()
         self._version = 0
-        self._executor = ThreadPoolExecutor(
-            max_workers=MAX_PARALLEL_DOWNLOADS, thread_name_prefix="download"
-        )
+        # Jobs not started yet (only when MAX_PARALLEL_DOWNLOADS is set), and how many run
+        self._waiting = []
+        self._running = 0
         # Files from a previous run have no job left pointing at them
         shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -222,19 +228,60 @@ class JobManager:
             )
             with self._cond:
                 self._jobs[job.id] = job
-            job.future = self._executor.submit(self._run, job)
+                self._waiting.append(job)
             jobs.append(job)
+        self._dispatch()
         self._touch()
         return jobs
+
+    def _dispatch(self):
+        """Start waiting jobs while there is room, priority ones first."""
+        with self._cond:
+            while self._waiting and (MAX_PARALLEL_DOWNLOADS == 0 or self._running < MAX_PARALLEL_DOWNLOADS):
+                job = next((j for j in self._waiting if j.priority), self._waiting[0])
+                self._waiting.remove(job)
+                self._running += 1
+                threading.Thread(target=self._work, args=(job,), daemon=True,
+                                 name=f"download-{job.id}").start()
+
+    def _work(self, job):
+        try:
+            self._run(job)
+        finally:
+            with self._cond:
+                self._running -= 1
+            self._dispatch()
+
+    def _unqueue(self, job):
+        """Take a job out of the line before it starts; False when it already runs."""
+        with self._cond:
+            if job not in self._waiting:
+                return False
+            self._waiting.remove(job)
+            return True
 
     def cancel(self, job_id):
         job = self.get(job_id)
         if not job or job.status in FINISHED:
             return job
         job.cancel_event.set()
-        # A job still waiting in the pool never starts
-        if job.future and job.future.cancel():
+        # A job still waiting in line never starts
+        if self._unqueue(job):
             self._update(job, status="cancelled", finished_at=time.time())
+        return job
+
+    def prioritize(self, job_id, on=True):
+        """Give one download priority (taking it from any other), or take it away."""
+        with self._cond:
+            job = self._jobs.get(job_id)
+            if not job or job.status in FINISHED:
+                return job
+            for other in self._jobs.values():
+                other.priority = False
+            job.priority = on
+            self._version += 1
+            self._cond.notify_all()
+        self._dispatch()
         return job
 
     def remove(self, job_id):
@@ -249,9 +296,9 @@ class JobManager:
         leftovers = []
         for job in jobs:
             job.cancel_event.set()
-            # A job still waiting in the pool never starts; a running one deletes
+            # A job still waiting in line never starts; a running one deletes
             # its own folder when it notices the cancel
-            if job.status in FINISHED or (job.future and job.future.cancel()):
+            if self._unqueue(job) or job.status in FINISHED:
                 leftovers.append(job.dir)
         self._touch()
         if leftovers:
@@ -306,7 +353,8 @@ class JobManager:
         try:
             log("info", f"Job {job.id}: downloading {job.url} as {job.format_id}")
             # Polite mode: wait for one of the site's few slots and its spacing between starts
-            with gate.slot(job.url, job.cancel_event, lambda stage: self._update(job, status="queued", stage=stage)):
+            with gate.slot(job.url, job.cancel_event, lambda stage: self._update(job, status="queued", stage=stage),
+                           urgent=lambda: job.priority):
                 self._update(job, status="starting", stage="Resolving")
                 # YouTube now and then refuses a stream with 403 (often when several downloads of
                 # the same video run at once); a second try, after a pause, usually gets through
@@ -363,6 +411,7 @@ class JobManager:
                 speed=None,
                 eta=None,
                 notice=notice,
+                priority=False,
                 finished_at=time.time(),
                 # The login was only needed to fetch the file
                 cookie_text=None,
@@ -375,11 +424,11 @@ class JobManager:
             shutil.rmtree(job.dir, ignore_errors=True)
             if job.cancel_event.is_set() or isinstance(exc, DownloadCancelled):
                 self._update(job, status="cancelled", stage="", speed=None, eta=None,
-                             finished_at=time.time())
+                             priority=False, finished_at=time.time())
             else:
                 log("warning", f"Job {job.id}: failed", payload={"error": str(exc)})
                 self._update(job, status="error", stage="", error=clean_error(exc),
-                             speed=None, eta=None, finished_at=time.time())
+                             speed=None, eta=None, priority=False, finished_at=time.time())
 
     def _on_progress(self, job, d):
         if job.cancel_event.is_set():
@@ -420,8 +469,31 @@ class JobManager:
                 stream=f"{index + 1}/{streams}" if streams > 1 else "",
                 **fields,
             )
+            self._hold_back(job, done)
         elif d["status"] == "finished":
             self._update(job, streams_done=job.streams_done + 1, **fields)
+
+    def _hold_back(self, job, done):
+        """
+        Slow this download to BACKGROUND_KBPS while another one has priority. Called from
+        yt-dlp's progress hook, so sleeping here stalls the read and the server slows down too.
+        """
+        with self._cond:
+            yielding = BACKGROUND_KBPS > 0 and not job.priority and any(
+                # Not while it still waits for a turn: slowing the others would only delay it
+                j.priority and j.status in ("starting", "downloading")
+                for j in self._jobs.values()
+            )
+        now = time.monotonic()
+        # Each stream counts its bytes from zero again
+        if not yielding or job.throttle_mark is None or done < job.throttle_mark[1]:
+            job.throttle_mark = (now, done) if yielding else None
+            return
+        since, start_bytes = job.throttle_mark
+        wait = (done - start_bytes) / (BACKGROUND_KBPS * 1024) - (now - since)
+        # In short naps, so a priority change or a cancel takes effect quickly
+        if wait > 0 and job.cancel_event.wait(min(wait, 1.0)):
+            raise DownloadCancelled("Cancelled")
 
     def _on_postprocess(self, job, d):
         if job.cancel_event.is_set():

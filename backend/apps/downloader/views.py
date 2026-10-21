@@ -39,6 +39,7 @@ class StatusView(APIView):
         return Response({
             "max_parallel": MAX_PARALLEL_DOWNLOADS,
             "polite": POLITE_MODE,
+            # 0 means no limit
             "per_site_parallel": PER_SITE_PARALLEL if POLITE_MODE else None,
             # "upload" (added from the page or the extension), "file" (COOKIES_FILE) or null
             "cookies": cookies_source(),
@@ -155,6 +156,19 @@ class JobCancelView(APIView):
 
     def post(self, request, job_id):
         job = get_manager().cancel(job_id)
+        if not job:
+            return Response({"error": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(job.to_dict())
+
+
+class JobPriorityView(APIView):
+    """
+    POST /api/jobs/<id>/priority/ -> make this the download that goes first and fastest
+    (the others slow down meanwhile). With {"on": false} it goes back to normal.
+    """
+
+    def post(self, request, job_id):
+        job = get_manager().prioritize(job_id, on=request.data.get("on", True) is not False)
         if not job:
             return Response({"error": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
         return Response(job.to_dict())

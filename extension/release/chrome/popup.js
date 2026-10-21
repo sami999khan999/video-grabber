@@ -34,6 +34,7 @@ const ICONS = {
   save: ["M12 3v12", "m7 10 5 5 5-5", "M5 21h14"],
   cancel: ["M18 6 6 18", "M6 6l12 12"],
   retry: ["M3 12a9 9 0 1 0 3-6.7L3 8", "M3 3v5h5"],
+  bolt: ["M13 2 3 14h9l-1 8 10-12h-9l1-8z"],
 };
 
 // Only show pictures that come from a real web address
@@ -125,7 +126,8 @@ async function checkServer() {
   try {
     const status = await VG.api("/status/");
     $("link-dot").className = "dot ok";
-    $("link-dot").title = `Connected · ${status.max_parallel} parallel · ${status.cookies ? "cookies on" : "no cookies"}`;
+    const parallel = status.max_parallel ? `${status.max_parallel} parallel` : "all at once";
+    $("link-dot").title = `Connected · ${parallel} · ${status.cookies ? "cookies on" : "no cookies"}`;
   } catch (err) {
     $("link-dot").className = "dot bad";
     $("link-dot").title = err.message;
@@ -543,11 +545,11 @@ function jobRow(job) {
         : mixing
           ? job.stage
           : job.status === "queued"
-            ? "waiting for a slot"
+            ? job.stage || "waiting for a slot"
             : "";
 
-  const button = (title, iconName, onclick) =>
-    h("button", { class: "icon-btn", title, "aria-label": title, onclick }, icon(ICONS[iconName]));
+  const button = (title, iconName, onclick, extra = {}) =>
+    h("button", { class: "icon-btn", title, "aria-label": title, onclick, ...extra }, icon(ICONS[iconName]));
 
   return h(
     "li",
@@ -557,6 +559,14 @@ function jobRow(job) {
     h(
       "div",
       { class: "job-actions" },
+      active &&
+        !mixing &&
+        button(
+          job.priority ? "Stop prioritizing" : "Prioritize: download this one first, slow the others down",
+          "bolt",
+          () => run(VG.api(`/jobs/${job.id}/priority/`, { method: "POST", body: { on: !job.priority } })),
+          { class: `icon-btn ${job.priority ? "on" : ""}`, "aria-pressed": String(!!job.priority) },
+        ),
       job.status === "done" && button("Save file", "save", () => chrome.downloads.download({ url: `${state.server}/api/jobs/${job.id}/file/` })),
       (job.status === "error" || job.status === "cancelled") &&
         button("Retry", "retry", () =>
@@ -564,7 +574,14 @@ function jobRow(job) {
         ),
       button(active ? "Stop and remove" : "Remove", "cancel", () => removeJobs([job], VG.api(`/jobs/${job.id}/`, { method: "DELETE" }))),
     ),
-    h("div", { class: "job-line" }, h("span", { class: `sticker ${tone}` }, tag), h("span", {}, job.label), h("span", { class: "info" }, info)),
+    h(
+      "div",
+      { class: "job-line" },
+      h("span", { class: `sticker ${tone}` }, tag),
+      job.priority && h("span", { class: "sticker yellow" }, "Priority"),
+      h("span", {}, job.label),
+      h("span", { class: "info" }, info),
+    ),
     job.status === "error"
       ? h("div", { class: "error" }, job.error || "Failed")
       : job.status !== "cancelled" &&

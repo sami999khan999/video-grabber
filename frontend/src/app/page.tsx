@@ -246,6 +246,7 @@ export default function Home() {
                 autoSave={autoSave}
                 onAutoSave={changeAutoSave}
                 onRetry={(job) => run(videoApi.retry(job.id), true)}
+                onPrioritize={(job) => run(videoApi.prioritize(job.id, !job.priority))}
                 onRemove={(job) => remove([job], videoApi.remove(job.id))}
                 onClear={() => remove(jobs.filter((j) => !isActive(j)), videoApi.clear())}
                 onRemoveAll={() => remove(jobs, videoApi.clear(true))}

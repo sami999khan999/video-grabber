@@ -76,6 +76,8 @@ export interface Job {
   error: string | null;
   /** E.g. the file came out below the chosen quality */
   notice: string | null;
+  /** The one download that goes first; the others slow down while it runs */
+  priority: boolean;
   created_at: number;
   finished_at: number | null;
 }
@@ -90,6 +92,7 @@ export interface NewJob {
 }
 
 export interface StationStatus {
+  /** 0 means every download starts at once */
   max_parallel: number;
   /** Where the cookies come from: uploaded from the page, a mounted file, or none */
   cookies: "upload" | "file" | null;
@@ -100,7 +103,7 @@ export interface StationStatus {
 export const ACTIVE_STATUSES: JobStatus[] = ["queued", "starting", "downloading", "processing", "merging"];
 export const isActive = (job: Job) => ACTIVE_STATUSES.includes(job.status);
 
-// Live downloads first, then mixing, waiting and finished; newest first within each group
+// The priority download on top, then live downloads, mixing, waiting and finished; newest first within each group
 const STATUS_RANK: Record<JobStatus, number> = {
   downloading: 0,
   merging: 1,
@@ -112,7 +115,7 @@ const STATUS_RANK: Record<JobStatus, number> = {
   cancelled: 6,
 };
 export const byPriority = (a: Job, b: Job) =>
-  STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.created_at - a.created_at;
+  Number(b.priority) - Number(a.priority) || STATUS_RANK[a.status] - STATUS_RANK[b.status] || b.created_at - a.created_at;
 
 // Views return { error: "..." }; the DRF exception handler returns { error: { details: "..." } }
 const readError = async (res: Response, fallback: string): Promise<string> => {
@@ -153,6 +156,8 @@ export const videoApi = {
 
   cancel: (id: string) => request<Job>(`/jobs/${id}/cancel/`, { method: "POST" }, "Failed to cancel."),
   retry: (id: string) => request<Job>(`/jobs/${id}/retry/`, { method: "POST" }, "Failed to retry."),
+  prioritize: (id: string, on = true) =>
+    request<Job>(`/jobs/${id}/priority/`, { method: "POST", body: JSON.stringify({ on }) }, "Failed to change priority."),
   remove: (id: string) => request<void>(`/jobs/${id}/`, { method: "DELETE" }, "Failed to remove."),
   clear: (all = false) =>
     request<{ removed: number }>(

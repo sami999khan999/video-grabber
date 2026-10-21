@@ -637,6 +637,11 @@ main {
   height: 13px;
 }
 
+.job-actions .icon-btn.on {
+  background: var(--yellow);
+  color: var(--ink);
+}
+
 .job-line {
   display: flex;
   min-width: 0;

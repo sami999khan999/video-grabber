@@ -12,10 +12,11 @@ from yt_dlp.utils import DownloadCancelled
 # few downloads per site at once, a random pause between starting them, a pause between
 # yt-dlp's own requests. Sites block on bursts, so this is what keeps the IP (and cookies) clean.
 POLITE_MODE = os.environ.get("POLITE_MODE", "1") != "0"
-PER_SITE_PARALLEL = max(1, int(os.environ.get("PER_SITE_PARALLEL", "2")))
+# 0 lets every download from a site run at once; starts are still spaced out (START_GAP)
+PER_SITE_PARALLEL = max(0, int(os.environ.get("PER_SITE_PARALLEL", "0")))
 START_GAP = (
-    float(os.environ.get("START_GAP_MIN", "3")),
-    float(os.environ.get("START_GAP_MAX", "8")),
+    float(os.environ.get("START_GAP_MIN", "1")),
+    float(os.environ.get("START_GAP_MAX", "3")),
 )
 # Seconds yt-dlp waits between the requests it makes while resolving one video
 REQUEST_SLEEP = float(os.environ.get("REQUEST_SLEEP", "1"))
@@ -43,12 +44,17 @@ class SiteGate:
         self._next_start = {}
 
     def _semaphore(self, site):
+        if not PER_SITE_PARALLEL:
+            return None
         with self._lock:
             return self._slots.setdefault(site, threading.BoundedSemaphore(PER_SITE_PARALLEL))
 
     @contextmanager
-    def slot(self, url, cancel_event, on_wait=None):
-        """Hold one of the site's download slots, starting no sooner than its spacing allows."""
+    def slot(self, url, cancel_event, on_wait=None, urgent=lambda: False):
+        """
+        Hold one of the site's download slots, starting no sooner than its spacing allows.
+        An `urgent` (priority) download still waits for a slot but skips the spacing.
+        """
         if not POLITE_MODE:
             yield
             return
@@ -56,7 +62,7 @@ class SiteGate:
         site = site_of(url)
         semaphore = self._semaphore(site)
         waited = False
-        while not semaphore.acquire(timeout=0.5):
+        while semaphore and not semaphore.acquire(timeout=0.5):
             if cancel_event.is_set():
                 raise DownloadCancelled("Cancelled")
             if not waited and on_wait:
@@ -70,12 +76,13 @@ class SiteGate:
                 self._next_start[site] = start + random.uniform(*START_GAP)
             if start > now and on_wait:
                 on_wait("Pacing requests")
-            while time.time() < start:
+            while time.time() < start and not urgent():
                 if cancel_event.wait(min(0.5, start - time.time())):
                     raise DownloadCancelled("Cancelled")
             yield
         finally:
-            semaphore.release()
+            if semaphore:
+                semaphore.release()
 
 
 gate = SiteGate()

@@ -52,7 +52,7 @@ services:
     ports:
       - "7845:7845"
     environment:
-      MAX_PARALLEL_DOWNLOADS: 3
+      MAX_PARALLEL_DOWNLOADS: 0   # 0 = all at once
     volumes:
       - data:/data   # uploaded YouTube cookies survive restarts
     restart: unless-stopped
@@ -75,7 +75,7 @@ docker compose up -d
 | 🎧 **Audio only** | Original AAC (M4A) or Opus, or converted to MP3 at 192 kbps |
 | 📼 **Playlists** | Lists every video with thumbnails; tick the ones you want, pick one quality cap for all of them and queue them in one go |
 | 📡 **Live progress** | Server-Sent Events push percent, size, speed, ETA, which stream (video, then audio) and the merge / convert step |
-| 🔀 **Parallel downloads** | A worker pool runs several at once (3 by default); the rest wait on standby. Cancel, retry or remove any of them |
+| 🔀 **Parallel downloads** | Every download starts at once (or cap them with `MAX_PARALLEL_DOWNLOADS`). ⚡ Prioritize one and the others slow down so it finishes first. Cancel, retry or remove any of them |
 | 💾 **Straight to disk** | Finished files go to the browser's own download manager (auto-save is optional); nothing is held in browser memory |
 | 🌐 **Almost any site** | ~1,800 sites by name through yt-dlp; with the extension, also the video a page is playing on any other site (MP4, HLS, DASH), fetched with that page's headers and, if you allow it, your login for that site |
 | 🍪 **YouTube-proof** | When YouTube says *"confirm you're not a bot"*, the extension hands your YouTube login to the server (once or automatically), or you upload a `cookies.txt`; it's only used when the site insists, so it never costs you quality |
@@ -175,10 +175,11 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 
 | Variable | Default | What it does |
 |---|---|---|
-| `MAX_PARALLEL_DOWNLOADS` | `3` | Downloads that run at the same time; the rest wait |
+| `MAX_PARALLEL_DOWNLOADS` | `0` | Downloads that run at the same time; `0` starts them all at once, a number makes the rest wait (priority first) |
+| `BACKGROUND_KBPS` | `256` | While one download has priority (⚡ button), every other one is held to this speed in KB/s; `0` leaves them alone |
 | `POLITE_MODE` | `1` | Pace traffic per site (below); `0` turns it off |
-| `PER_SITE_PARALLEL` | `2` | Most downloads from one site at once, in polite mode |
-| `START_GAP_MIN` / `START_GAP_MAX` | `3` / `8` | Random seconds between starting downloads from one site |
+| `PER_SITE_PARALLEL` | `0` | Most downloads from one site at once, in polite mode; `0` is no limit |
+| `START_GAP_MIN` / `START_GAP_MAX` | `1` / `3` | Random seconds between starting downloads from one site |
 | `REQUEST_SLEEP` | `1` | Seconds yt-dlp waits between its own requests |
 | `FRAGMENT_PARALLEL` | `8` | Pieces of an HLS/DASH video fetched at once; higher is faster, `1` is one at a time |
 | `HTTP_CHUNK_MB` | `10` | Plain files are fetched in chunks of this size, which gets past per-request throttling; `0` turns it off |
@@ -198,10 +199,11 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 
 ## 🐢 Polite mode (on by default)
 
-Sites block addresses that send bursts of requests, so the server paces itself: at most 2 downloads
-per site at once, a random 3–8 s gap between starting them, a 1 s pause between yt-dlp's own
+Sites block addresses that send bursts of requests, so the server paces itself: a random 1–3 s gap
+between starting downloads from one site (a prioritized one skips it), a 1 s pause between yt-dlp's own
 requests, lookups reused for 10 minutes, and a longer random wait before retrying a refused stream.
-A 50-video playlist trickles in instead of hitting the site all at once. Nothing can promise a site
+A 50-video playlist ramps up over a minute or two instead of hitting the site in one go; set
+`PER_SITE_PARALLEL` and a wider `START_GAP_*` if a site still pushes back. Nothing can promise a site
 will never block you, but this keeps the traffic looking like a person rather than a bot.
 
 ## 🍪 YouTube says "Sign in to confirm you're not a bot"
@@ -245,6 +247,7 @@ Base URL `/api`, JSON bodies.
 | `GET` | `/jobs/stream/` | | Server-Sent Events: `{ jobs: [...] }` on every change |
 | `POST` | `/jobs/:id/cancel/` | | Stops a job, keeps it listed |
 | `POST` | `/jobs/:id/retry/` | | Replaces a failed or cancelled job |
+| `POST` | `/jobs/:id/priority/` | `{ on? }` | Makes this the one download that goes first; the rest slow down (`on: false` undoes it) |
 | `DELETE` | `/jobs/:id/` | | Cancels if needed, removes the job and its file |
 | `POST` | `/jobs/clear/` | | Removes finished, failed and cancelled jobs |
 | `GET` | `/jobs/:id/file/` | | The finished file |

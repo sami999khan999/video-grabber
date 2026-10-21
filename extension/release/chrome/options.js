@@ -64,7 +64,8 @@ async function test(server) {
   }
   if (!res.ok) throw new Error(`${server} answered ${res.status}. Is that a Video Grabber server?`);
   const status = await res.json();
-  return `Connected: ${status.max_parallel} downloads at a time, ${status.cookies ? "cookies on" : "no cookies"}.`;
+  const parallel = status.max_parallel ? `${status.max_parallel} downloads at a time` : "all downloads at once";
+  return `Connected: ${parallel}, ${status.cookies ? "cookies on" : "no cookies"}.`;
 }
 
 $("test").addEventListener("click", (e) =>

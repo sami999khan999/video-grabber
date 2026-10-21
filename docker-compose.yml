@@ -10,7 +10,7 @@ services:
       - path: ./backend/.env
         required: false
     environment:
-      MAX_PARALLEL_DOWNLOADS: ${MAX_PARALLEL_DOWNLOADS:-3}
+      MAX_PARALLEL_DOWNLOADS: ${MAX_PARALLEL_DOWNLOADS:-0}
       # Cookies are easiest to add from the page (Auth button). To mount a file instead,
       # uncomment this and the cookies volume below.
       # COOKIES_FILE: /cookies/cookies.txt

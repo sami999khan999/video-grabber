@@ -130,7 +130,9 @@ var VG = (() => {
   const isActive = (job) => ACTIVE.includes(job.status);
 
   const RANK = { downloading: 0, merging: 1, processing: 1, starting: 2, queued: 3, error: 4, done: 5, cancelled: 6 };
-  const byPriority = (a, b) => RANK[a.status] - RANK[b.status] || b.created_at - a.created_at;
+  // The priority download on top, then by status, newest first
+  const byPriority = (a, b) =>
+    Number(!!b.priority) - Number(!!a.priority) || RANK[a.status] - RANK[b.status] || b.created_at - a.created_at;
 
   const formatBytes = (bytes) => {
     if (!bytes) return "--";

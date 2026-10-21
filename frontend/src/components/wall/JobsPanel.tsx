@@ -1,6 +1,6 @@
 "use client";
 
-import { Download, ListX, RotateCcw, Trash2, TriangleAlert, X } from "lucide-react";
+import { Download, ListX, RotateCcw, Trash2, TriangleAlert, X, Zap } from "lucide-react";
 import { byPriority, formatBytes, formatDuration, isActive, Job, saveJobFile } from "@/lib/api";
 
 const LOOK: Record<Job["status"], { text: string; tone: string }> = {
@@ -20,13 +20,14 @@ interface JobsPanelProps {
   autoSave: boolean;
   onAutoSave: (value: boolean) => void;
   onRetry: (job: Job) => void;
+  onPrioritize: (job: Job) => void;
   onRemove: (job: Job) => void;
   onClear: () => void;
   onRemoveAll: () => void;
   onOpenCookies: () => void;
 }
 
-export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onRemove, onClear, onRemoveAll, onOpenCookies }: JobsPanelProps) {
+export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onPrioritize, onRemove, onClear, onRemoveAll, onOpenCookies }: JobsPanelProps) {
   const list = (mode === "saved" ? jobs.filter((j) => j.status === "done") : jobs.filter((j) => j.status !== "done")).sort(byPriority);
   const finished = jobs.filter((j) => !isActive(j)).length;
 
@@ -70,7 +71,7 @@ export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onRemove,
       ) : (
         <ul className="pp-scroll -mr-2 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-2">
           {list.map((job) => (
-            <JobRow key={job.id} job={job} onRetry={onRetry} onRemove={onRemove} onOpenCookies={onOpenCookies} />
+            <JobRow key={job.id} job={job} onRetry={onRetry} onPrioritize={onPrioritize} onRemove={onRemove} onOpenCookies={onOpenCookies} />
           ))}
         </ul>
       )}
@@ -81,11 +82,13 @@ export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onRemove,
 function JobRow({
   job,
   onRetry,
+  onPrioritize,
   onRemove,
   onOpenCookies,
 }: {
   job: Job;
   onRetry: (job: Job) => void;
+  onPrioritize: (job: Job) => void;
   onRemove: (job: Job) => void;
   onOpenCookies: () => void;
 }) {
@@ -109,7 +112,7 @@ function JobRow({
         : mixing
           ? "Joining video and sound"
           : job.status === "queued"
-            ? "Waiting for a free slot"
+            ? job.stage || "Waiting for a free slot"
             : "";
 
   return (
@@ -125,6 +128,7 @@ function JobRow({
               <div className="truncate text-[14px] font-bold" title={job.title || job.url}>{job.title || job.url}</div>
               <div className="mt-1 flex flex-wrap items-center gap-2">
                 <span className={`pp-sticker ${look.tone} !rotate-0 !px-1.5 !py-0 !text-[10px] !shadow-none`}>{look.text}</span>
+                {job.priority && <span className="pp-sticker is-yellow !rotate-0 !px-1.5 !py-0 !text-[10px] !shadow-none">Priority</span>}
                 <span className="rounded-md bg-white/10 px-1.5 text-[11px] font-bold uppercase">{job.label}</span>
                 {job.group && <span className="truncate text-[11px] font-semibold text-[var(--muted)]">{job.group}</span>}
               </div>
@@ -133,6 +137,17 @@ function JobRow({
               {job.status === "done" && (
                 <button className="pp-btn is-icon is-yellow" onClick={() => saveJobFile(job)} aria-label="Save file" title="Save file">
                   <Download size={15} strokeWidth={3} />
+                </button>
+              )}
+              {active && !mixing && (
+                <button
+                  className={`pp-btn is-icon ${job.priority ? "is-yellow" : ""}`}
+                  onClick={() => onPrioritize(job)}
+                  aria-label={job.priority ? "Stop prioritizing" : "Prioritize"}
+                  aria-pressed={job.priority}
+                  title={job.priority ? "Stop prioritizing" : "Prioritize: download this one first, slow the others down"}
+                >
+                  <Zap size={15} strokeWidth={2.75} />
                 </button>
               )}
               {(job.status === "error" || job.status === "cancelled") && (
