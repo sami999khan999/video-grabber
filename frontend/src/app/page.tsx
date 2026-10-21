@@ -11,7 +11,7 @@ import { TopBar } from "@/components/wall/TopBar";
 import { PRESETS, TunePanel } from "@/components/wall/TunePanel";
 import { TvWall } from "@/components/wall/TvWall";
 import { useJobs } from "@/hooks/use-jobs";
-import { isActive, Job, NewJob, SourceInfo, videoApi } from "@/lib/api";
+import { isActive, Job, NewJob, SourceInfo, StationStatus, videoApi } from "@/lib/api";
 import { useGlassScrollAll } from "@/lib/glass-scroll";
 
 const AUTO_SAVE_KEY = "video-grabber:auto-save";
@@ -201,6 +201,7 @@ export default function Home() {
         receiving={jobs.filter((j) => j.status === "downloading").length}
         saved={saved}
         speed={speed}
+        speedLimit={status?.speed_limit_kbps}
         cookies={status?.cookies}
         onHome={reset}
         onAuth={() => setView("auth")}
@@ -278,6 +279,16 @@ export default function Home() {
                 onClear={() => remove(jobs.filter((j) => !isActive(j)), videoApi.clear())}
                 onRemoveAll={() => remove(jobs, videoApi.clear(true))}
                 onOpenCookies={() => setView("auth")}
+                speedLimit={status?.speed_limit_kbps}
+                onSpeedLimit={(kbps) =>
+                  videoApi
+                    .setSpeedLimit(kbps)
+                    .then(({ speed_limit_kbps }) => {
+                      queryClient.setQueryData<StationStatus>(["status"], (s) => s && { ...s, speed_limit_kbps });
+                      setActionError(null);
+                    })
+                    .catch((err: Error) => setActionError(err.message))
+                }
               />
             )}
             {view === "auth" && (

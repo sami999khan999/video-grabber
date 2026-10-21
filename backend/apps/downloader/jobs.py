@@ -10,6 +10,7 @@ from yt_dlp.utils import DownloadCancelled
 
 from common.utils.log import log
 
+from .limits import SpeedLimiter, speed_limit
 from .politeness import gate, polite_options, retry_pause
 from .ytdlp import clean_headers, extract, mix_video_url
 
@@ -23,6 +24,8 @@ FRAGMENT_PARALLEL = max(1, int(os.environ.get("FRAGMENT_PARALLEL", "8")))
 # Plain files are asked for in chunks of this size: servers that throttle one long request
 # (YouTube does) serve each fresh chunk at full speed
 HTTP_CHUNK_MB = float(os.environ.get("HTTP_CHUNK_MB", "10"))
+# Seconds the speed shown for a limited download is averaged over
+RATE_WINDOW = 4
 JOB_TTL_SECONDS = float(os.environ.get("JOB_TTL_HOURS", "6")) * 3600
 DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR") or os.path.join(
     tempfile.gettempdir(), "video-grabber"
@@ -152,6 +155,10 @@ class Job:
         self.cancel_event = threading.Event()
         # (time, bytes) the background speed limit counts from
         self.throttle_mark = None
+        # Bytes of the current stream already counted against the total speed limit
+        self.limit_bytes = None
+        # Recent (time, bytes) readings, for the speed shown while a limit slows this download
+        self.rate_samples = []
 
     @property
     def dir(self):
@@ -192,6 +199,7 @@ class JobManager:
         # Jobs not started yet (only when MAX_PARALLEL_DOWNLOADS is set), and how many run
         self._waiting = []
         self._running = 0
+        self._limiter = SpeedLimiter()
         # Files from a previous run have no job left pointing at them
         shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -511,6 +519,12 @@ class JobManager:
             else:
                 fraction = 0.0
             index = min(job.streams_done, streams - 1)
+            speed, eta = d.get("speed"), d.get("eta")
+            if speed_limit() or job.throttle_mark is not None:
+                # yt-dlp times only the reads, not the pauses between them, so it would show
+                # the full speed; measure what actually arrived over the last few seconds
+                speed = self._measured_speed(job, done)
+                eta = (total - done) / speed if speed and total and total > done else eta
             kind = ""
             if streams > 1:
                 vcodec = info.get("vcodec") or "none"
@@ -522,36 +536,69 @@ class JobManager:
                 progress=min((index + fraction) / streams * 100, 99.0),
                 downloaded_bytes=done,
                 total_bytes=total,
-                speed=d.get("speed"),
-                eta=d.get("eta"),
+                speed=speed,
+                eta=eta,
                 stream=f"{index + 1}/{streams}" if streams > 1 else "",
                 **fields,
             )
             self._hold_back(job, done)
+            self._cap_speed(job, done)
         elif d["status"] == "finished":
             self._update(job, streams_done=job.streams_done + 1, **fields)
+
+    @staticmethod
+    def _measured_speed(job, done):
+        """Bytes per second over the last few seconds (None until there is enough to tell)."""
+        now = time.monotonic()
+        samples = job.rate_samples
+        # Each stream counts its bytes from zero again
+        if samples and done < samples[-1][1]:
+            samples.clear()
+        samples.append((now, done))
+        while len(samples) > 2 and now - samples[1][0] >= RATE_WINDOW:
+            samples.pop(0)
+        since, start = samples[0]
+        return (done - start) / (now - since) if now - since >= 1 else None
 
     def _hold_back(self, job, done):
         """
         Slow this download to BACKGROUND_KBPS while another one has priority. Called from
         yt-dlp's progress hook, so sleeping here stalls the read and the server slows down too.
         """
+        # In short naps, rechecking each time, so a priority change or a cancel takes effect quickly
+        while True:
+            with self._cond:
+                yielding = BACKGROUND_KBPS > 0 and not job.priority and any(
+                    # Not while it still waits for a turn: slowing the others would only delay it
+                    j.priority and j.status in ("starting", "downloading")
+                    for j in self._jobs.values()
+                )
+            background = BACKGROUND_KBPS
+            if speed_limit():
+                # Under a total limit too, so the priority download keeps most of it
+                background = min(background, speed_limit() / 8)
+            now = time.monotonic()
+            # Each stream counts its bytes from zero again
+            if not yielding or job.throttle_mark is None or done < job.throttle_mark[1]:
+                job.throttle_mark = (now, done) if yielding else None
+                return
+            since, start_bytes = job.throttle_mark
+            wait = (done - start_bytes) / (background * 1024) - (now - since)
+            if wait <= 0:
+                return
+            if job.cancel_event.wait(min(wait, 1.0)):
+                raise DownloadCancelled("Cancelled")
+
+    def _cap_speed(self, job, done):
+        """Keep all downloads together under the speed limit set on the page (if any)."""
         with self._cond:
-            yielding = BACKGROUND_KBPS > 0 and not job.priority and any(
-                # Not while it still waits for a turn: slowing the others would only delay it
-                j.priority and j.status in ("starting", "downloading")
-                for j in self._jobs.values()
-            )
-        now = time.monotonic()
+            last, job.limit_bytes = job.limit_bytes, done
         # Each stream counts its bytes from zero again
-        if not yielding or job.throttle_mark is None or done < job.throttle_mark[1]:
-            job.throttle_mark = (now, done) if yielding else None
-            return
-        since, start_bytes = job.throttle_mark
-        wait = (done - start_bytes) / (BACKGROUND_KBPS * 1024) - (now - since)
-        # In short naps, so a priority change or a cancel takes effect quickly
-        if wait > 0 and job.cancel_event.wait(min(wait, 1.0)):
-            raise DownloadCancelled("Cancelled")
+        wait = self._limiter.delay(done - last) if last is not None and done > last else 0.0
+        while wait > 0:
+            if job.cancel_event.wait(min(wait, 1.0)):
+                raise DownloadCancelled("Cancelled")
+            wait -= 1.0
 
     def _on_postprocess(self, job, d):
         if job.cancel_event.is_set():

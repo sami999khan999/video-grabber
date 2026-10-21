@@ -19,6 +19,7 @@ progress live. Works in Chrome, Edge, Brave, Opera and Firefox.
 - **Popup**: reads the page you're on and lists every quality the server finds (4K to 144p, 60fps/HDR,
   MP4/MKV, sizes) plus M4A, Opus and MP3. Playlists show their videos with one quality for all.
 - **Live progress**: speed, time left, merge/convert step; save, cancel or retry from the list.
+- **Speed limit**: cap all downloads together from the Downloads tab (the server keeps the setting).
 - **Right-click menu**: *Grab with Video Grabber → Best / 1080p / 720p / M4A / MP3* on any page or link.
 - **Badge and notifications**: the toolbar shows how many downloads are running; you get a
   notification when one is ready or fails.

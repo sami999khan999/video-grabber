@@ -9,6 +9,7 @@ from .views import (
     JobPauseView,
     JobPriorityView,
     JobRetryView,
+    SettingsView,
     StatusView,
     VideoInfoView,
     job_file,
@@ -17,6 +18,7 @@ from .views import (
 
 urlpatterns = [
     path("status/", StatusView.as_view(), name="status"),
+    path("settings/", SettingsView.as_view(), name="settings"),
     path("cookies/", CookiesView.as_view(), name="cookies"),
     path("info/", VideoInfoView.as_view(), name="video-info"),
     path("jobs/", JobListView.as_view(), name="job-list"),

@@ -1,19 +1,21 @@
 "use client";
 
 import { CheckCheck, Gauge, Home, KeyRound, Radio, Tv } from "lucide-react";
-import { formatBytes } from "@/lib/api";
+import { formatBytes, formatLimit } from "@/lib/api";
 
 interface TopBarProps {
   connected: boolean;
   receiving: number;
   saved: number;
   speed: number;
+  /** KB/s, 0 for none */
+  speedLimit?: number;
   cookies: "upload" | "file" | null | undefined;
   onHome: () => void;
   onAuth: () => void;
 }
 
-export function TopBar({ connected, receiving, saved, speed, cookies, onHome, onAuth }: TopBarProps) {
+export function TopBar({ connected, receiving, saved, speed, speedLimit, cookies, onHome, onAuth }: TopBarProps) {
   return (
     <header className="relative z-20 flex items-center justify-between gap-3 border-b-[2.5px] border-[var(--ink)] bg-[var(--ink)]/90 px-3 py-2.5 backdrop-blur sm:px-5">
       <div className="flex min-w-0 items-center gap-2.5">
@@ -42,9 +44,10 @@ export function TopBar({ connected, receiving, saved, speed, cookies, onHome, on
           <CheckCheck size={15} className="text-[var(--lime)]" strokeWidth={2.75} />
           <span className="tabular-nums">{saved.toString().padStart(2, "0")}</span>
         </span>
-        <span className="pp-pill hidden sm:inline-flex" title="Total download speed">
-          <Gauge size={15} className="text-[var(--teal)]" strokeWidth={2.75} />
+        <span className="pp-pill hidden sm:inline-flex" title={speedLimit ? `Total download speed (limited to ${formatLimit(speedLimit)})` : "Total download speed"}>
+          <Gauge size={15} className={speedLimit ? "text-[var(--yellow)]" : "text-[var(--teal)]"} strokeWidth={2.75} />
           <span className="tabular-nums">{speed ? `${formatBytes(speed)}/s` : "0 B/s"}</span>
+          {!!speedLimit && <span className="text-[var(--muted)] tabular-nums">/ {formatLimit(speedLimit)}</span>}
         </span>
         <button className="pp-pill hover:brightness-125" onClick={onAuth} title="YouTube cookies">
           <KeyRound size={15} className={cookies ? "text-[var(--lime)]" : "text-[var(--muted)]"} strokeWidth={2.75} />

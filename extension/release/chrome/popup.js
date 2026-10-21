@@ -84,6 +84,7 @@ async function init() {
   $("clear-all").addEventListener("click", () =>
     removeJobs(state.jobs, VG.api("/jobs/clear/", { method: "POST", body: { all: true } })),
   );
+  $("speed-limit").addEventListener("change", (e) => setSpeedLimit(Number(e.target.value)));
   $("link-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const link = $("link").value.trim();
@@ -136,6 +137,8 @@ async function checkServer() {
     $("link-dot").className = "dot ok";
     const parallel = status.max_parallel ? `${status.max_parallel} parallel` : "all at once";
     $("link-dot").title = `Connected · ${parallel} · ${status.cookies ? "cookies on" : "no cookies"}`;
+    // Servers older than the speed limit don't send it
+    if (status.speed_limit_kbps != null) renderSpeedLimit(status.speed_limit_kbps);
   } catch (err) {
     $("link-dot").className = "dot bad";
     $("link-dot").title = err.message;
@@ -617,6 +620,38 @@ const LOOK = {
 };
 
 /** "page" (what this tab offers) or "jobs" (the downloads). */
+// --- speed limit ---------------------------------------------------------------
+
+// KB/s for all downloads together; 0 is no limit
+const SPEED_LIMITS = [0, 256, 512, 1024, 2048, 5120, 10240, 20480, 51200];
+const formatLimit = (kbps) => (kbps < 1024 ? `${kbps} KB/s` : `${+(kbps / 1024).toFixed(1)} MB/s`);
+
+function renderSpeedLimit(kbps) {
+  // A limit set elsewhere that isn't one of the choices still shows
+  const choices = [...new Set([...SPEED_LIMITS, kbps])].sort((a, b) => a - b);
+  $("speed-limit").replaceChildren(
+    ...choices.map((n) => h("option", { value: String(n) }, n ? `Max ${formatLimit(n)}` : "No speed limit")),
+  );
+  $("speed-limit").value = String(kbps);
+  $("speed-wrap").classList.toggle("on", kbps > 0);
+  $("speed-wrap").hidden = false;
+}
+
+async function setSpeedLimit(kbps) {
+  $("speed-limit").disabled = true;
+  try {
+    const { speed_limit_kbps } = await VG.api("/settings/", { method: "POST", body: { speed_limit_kbps: kbps } });
+    renderSpeedLimit(speed_limit_kbps);
+    $("speed-wrap").title = "The most all downloads together may use";
+  } catch (err) {
+    // Back to what the server has, with the reason on hover
+    $("speed-wrap").title = err.message;
+    checkServer();
+  } finally {
+    $("speed-limit").disabled = false;
+  }
+}
+
 function showTab(name) {
   const jobs = name === "jobs";
   $("tab-page").setAttribute("aria-selected", String(!jobs));

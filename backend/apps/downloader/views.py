@@ -9,6 +9,7 @@ from django.http import FileResponse, Http404, StreamingHttpResponse
 from django.views.decorators.http import require_GET
 
 from .jobs import FINISHED, MAX_PARALLEL_DOWNLOADS, clean_error, get_manager
+from .limits import set_speed_limit, speed_limit
 from .politeness import PER_SITE_PARALLEL, POLITE_MODE
 from .services import extract_video_info
 from .ytdlp import (
@@ -45,7 +46,29 @@ class StatusView(APIView):
             "cookies": cookies_source(),
             # For uploaded cookies: { origin: "file" | "extension", updated_at, count }
             "cookies_detail": cookies_detail(),
+            # All downloads together, in KB/s; 0 means no limit
+            "speed_limit_kbps": speed_limit(),
         })
+
+
+class SettingsView(APIView):
+    """
+    GET  /api/settings/ -> { speed_limit_kbps }
+    POST /api/settings/ -> change them; speed_limit_kbps is the total for all downloads in KB/s,
+                           0 for no limit. Running downloads follow the new limit straight away.
+    """
+
+    def get(self, request):
+        return Response({"speed_limit_kbps": speed_limit()})
+
+    def post(self, request):
+        if "speed_limit_kbps" in request.data:
+            try:
+                set_speed_limit(request.data["speed_limit_kbps"] or 0)
+            except (TypeError, ValueError):
+                return Response({"error": "speed_limit_kbps must be a whole number of KB/s (0 for no limit)."},
+                                status=status.HTTP_400_BAD_REQUEST)
+        return Response({"speed_limit_kbps": speed_limit()})
 
 
 class CookiesView(APIView):

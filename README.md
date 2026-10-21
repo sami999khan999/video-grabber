@@ -76,6 +76,7 @@ docker compose up -d
 | 📼 **Playlists** | Lists every video with thumbnails; tick the ones you want, pick one quality cap for all of them and queue them in one go |
 | 📡 **Live progress** | Server-Sent Events push percent, size, speed, ETA, which stream (video, then audio) and the merge / convert step |
 | 🔀 **Parallel downloads** | Every download starts at once (or cap them with `MAX_PARALLEL_DOWNLOADS`). ⚡ Prioritize one and the others slow down so it finishes first. Pause and resume, cancel, retry or remove any of them |
+| 🐢 **Speed limit** | Cap how fast all downloads together may go (from the On air panel or the extension), so the rest of the network stays usable; running downloads follow a change straight away |
 | 💾 **Straight to disk** | Finished files go to the browser's own download manager (auto-save is optional); nothing is held in browser memory |
 | 🌐 **Almost any site** | ~1,800 sites by name through yt-dlp; with the extension, also the video a page is playing on any other site (MP4, HLS, DASH), fetched with that page's headers and, if you allow it, your login for that site |
 | 🍪 **YouTube-proof** | When YouTube says *"confirm you're not a bot"*, the extension has already handed your YouTube login to the server (or you upload a `cookies.txt`); it's only used when the site insists, so it never costs you quality |
@@ -176,6 +177,7 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 | Variable | Default | What it does |
 |---|---|---|
 | `MAX_PARALLEL_DOWNLOADS` | `0` | Downloads that run at the same time; `0` starts them all at once, a number makes the rest wait (priority first) |
+| `SPEED_LIMIT_KBPS` | `0` | Starting total speed limit for all downloads in KB/s (`0` = none); once it's changed from the page or the extension, that setting (saved in `DATA_DIR`) wins |
 | `BACKGROUND_KBPS` | `256` | While one download has priority (⚡ button), every other one is held to this speed in KB/s; `0` leaves them alone |
 | `POLITE_MODE` | `1` | Pace traffic per site (below); `0` turns it off |
 | `PER_SITE_PARALLEL` | `0` | Most downloads from one site at once, in polite mode; `0` is no limit |
@@ -240,7 +242,8 @@ Base URL `/api`, JSON bodies.
 
 | Method | Path | Body | Does |
 |---|---|---|---|
-| `GET` | `/status/` | | `{ max_parallel, cookies }` |
+| `GET` | `/status/` | | `{ max_parallel, cookies, speed_limit_kbps }` |
+| `GET` · `POST` | `/settings/` | `{ speed_limit_kbps }` | The total download speed limit in KB/s (`0` = none); applies to running downloads at once and is kept across restarts |
 | `POST` | `/info/` | `{ url, start? }` | Video formats, or playlist entries (`kind` says which). Endless lists (YouTube history and feeds, Mixes) come 100 at a time: pass the returned `next_start` as `start` for the next page |
 | `GET` | `/jobs/` | | All jobs |
 | `POST` | `/jobs/` | `{ items: [{ url, format_id, label?, title?, thumbnail?, group?, headers?, cookies? }] }` | Queues one job per item |

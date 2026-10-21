@@ -787,8 +787,60 @@ svg {
 .jobs-head {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 6px;
   margin-bottom: 8px;
+}
+
+/* Speed limit picker, styled like a ghost button; yellow while a limit is on */
+.speed {
+  margin-right: auto;
+  display: inline-flex;
+  align-items: center;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #262a31, #0f1114);
+  border: var(--outline);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.12), 0 3px 0 var(--ink);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.speed[hidden] {
+  display: none;
+}
+
+.speed.on {
+  color: var(--yellow);
+}
+
+.speed select {
+  appearance: none;
+  background: transparent;
+  border: 0;
+  padding-right: 13px;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: right 4px center, right 0 center;
+  background-size: 4px 4px;
+  background-repeat: no-repeat;
+}
+
+.speed select:focus-visible {
+  outline: none;
+}
+
+.speed:focus-within {
+  outline: 2px solid var(--yellow);
+  outline-offset: 2px;
+}
+
+.speed option {
+  background: var(--panel);
+  color: var(--paper);
 }
 
 .section-head {

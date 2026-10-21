@@ -103,7 +103,14 @@ export interface StationStatus {
   cookies: "upload" | "file" | null;
   /** For uploaded cookies: synced by the browser extension or uploaded as a file, and when */
   cookies_detail: { origin: "file" | "extension"; updated_at: number; count: number | null } | null;
+  /** Total for all downloads in KB/s; 0 means no limit */
+  speed_limit_kbps: number;
 }
+
+/** Speed limit choices in KB/s (0 = no limit) */
+export const SPEED_LIMITS = [0, 256, 512, 1024, 2048, 5120, 10240, 20480, 51200];
+export const formatLimit = (kbps: number) =>
+  kbps === 0 ? "No limit" : kbps < 1024 ? `${kbps} KB/s` : `${+(kbps / 1024).toFixed(1)} MB/s`;
 
 export const ACTIVE_STATUSES: JobStatus[] = ["queued", "starting", "downloading", "processing", "merging", "paused"];
 /** Running or waiting, so it can still be paused (not while the file is being joined) */
@@ -147,6 +154,13 @@ const request = async <T>(path: string, init: RequestInit, fallback: string): Pr
 
 export const videoApi = {
   status: () => request<StationStatus>("/status/", { method: "GET" }, "Station offline."),
+
+  setSpeedLimit: (kbps: number) =>
+    request<{ speed_limit_kbps: number }>(
+      "/settings/",
+      { method: "POST", body: JSON.stringify({ speed_limit_kbps: kbps }) },
+      "Failed to change the speed limit.",
+    ),
 
   fetchInfo: (url: string, start?: number) =>
     request<SourceInfo>(
