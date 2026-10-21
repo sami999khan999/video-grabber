@@ -46,6 +46,7 @@ chrome.contextMenus.onClicked.addListener(async (info, tab) => {
   const url = info.linkUrl || src || info.pageUrl;
   const label = MENU.find((m) => m.id === formatId)?.title ?? formatId;
   try {
+    if (VG.isYouTube(url)) await VG.freshYouTubeLogin();
     const cookies = await VG.cookieTextFor([url]);
     let items;
     let source;
@@ -266,7 +267,11 @@ async function scheduleYouTubeSync() {
 }
 
 chrome.runtime.onStartup.addListener(scheduleYouTubeSync);
-chrome.runtime.onInstalled.addListener(scheduleYouTubeSync);
+chrome.runtime.onInstalled.addListener(async () => {
+  await scheduleYouTubeSync();
+  // Hand the login over straight away instead of at the first alarm
+  await VG.freshYouTubeLogin();
+});
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === "local" && changes.syncYouTube) scheduleYouTubeSync();
 });

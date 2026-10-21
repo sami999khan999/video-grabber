@@ -13,6 +13,7 @@ from .ytdlp import extract, mix_video_url, playing_playlist
 # Lookups are reused for a while, so opening the same link again (web app, extension popup)
 # doesn't send the site another round of requests
 INFO_CACHE_SECONDS = float(os.environ.get("INFO_CACHE_MINUTES", "10")) * 60
+MIX_LENGTH = 100
 _info_cache = {}
 _info_lock = threading.Lock()
 
@@ -43,9 +44,10 @@ def extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
 
 def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
     log("info", f"Extracting info for URL: {url}")
-    # A video played inside a playlist brings the whole playlist (that video marked);
-    # any other watch link with a playlist id (a Mix) means the single video
+    # A video played inside a playlist or Mix brings the whole list, that video marked
     playing = playing_playlist(url)
+    # A Mix never ends (YouTube keeps serving it, repeats and all): stop after a long playlist's worth
+    mix = {"playlistend": MIX_LENGTH} if playing and "list=RD" in url else {}
     info = extract(
         url,
         headers=headers,
@@ -54,6 +56,7 @@ def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
         noplaylist=not playing,
         # Playlists are listed without resolving every entry (fast)
         extract_flat="in_playlist",
+        **mix,
     )
     log("info", "yt-dlp info extracted", payload={
         "title": info.get("title"),
@@ -213,6 +216,7 @@ def _estimate_size(f: dict, duration: float):
 
 def _playlist_info(info: dict, url: str) -> dict:
     entries = []
+    seen = set()
     for entry in info.get("entries") or []:
         if not entry:
             continue
@@ -231,6 +235,10 @@ def _playlist_info(info: dict, url: str) -> dict:
         # Other playlists and channels in a feed aren't one video each
         elif entry.get("ie_key") == "YoutubeTab":
             continue
+        # Mixes and feeds repeat videos
+        if entry_url in seen:
+            continue
+        seen.add(entry_url)
         thumbnails = entry.get("thumbnails") or []
         entries.append({
             "id": entry.get("id") or entry_url,
@@ -247,8 +255,9 @@ def _playlist_info(info: dict, url: str) -> dict:
         if host == "youtube.com" or host.endswith(".youtube.com"):
             raise ValueError(
                 "Nothing to grab here. YouTube shows your history, feeds and private playlists "
-                "only to a signed-in user, so send your YouTube login (extension, Settings) or "
-                "upload a cookies.txt in the Cookies tab, then try again."
+                "only to a signed-in user, and the server has no working YouTube login. Be logged "
+                "in to YouTube in the browser with the extension (it sends the login by itself), "
+                "or upload a cookies.txt in the Cookies tab, then try again."
             )
         raise ValueError("This playlist is empty.")
 

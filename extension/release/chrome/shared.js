@@ -9,8 +9,9 @@ var VG = (() => {
     notify: true,
     // Pass the user's login for the video's site along with a download (off unless they opt in)
     sendCookies: false,
-    // Keep the server's YouTube cookies in step with this browser's login (off unless they opt in)
-    syncYouTube: false,
+    // Keep the server's YouTube cookies in step with this browser's login, so history, feeds,
+    // private playlists and the bot check just work
+    syncYouTube: true,
   };
 
   // --- YouTube login -------------------------------------------------------------------
@@ -44,6 +45,28 @@ var VG = (() => {
     } catch (err) {
       return record({ ok: false, error: err.message });
     }
+  };
+
+  const isYouTube = (url) => {
+    try {
+      const host = new URL(url).hostname;
+      return host === "youtube.com" || host.endsWith(".youtube.com") || host === "youtu.be";
+    } catch {
+      return false;
+    }
+  };
+
+  /**
+   * Before looking up a YouTube link: make sure the server has this browser's current login.
+   * YouTube rotates login cookies often, so a copy only minutes old can already be dead; this
+   * resends it unless it went out in the last two minutes. Quietly does nothing when sync is off,
+   * the browser hasn't allowed reading YouTube's cookies, or nobody is logged in.
+   */
+  const freshYouTubeLogin = async () => {
+    if (!(await getSettings()).syncYouTube || !(await hasYouTube())) return null;
+    const { lastYouTubeSync: last } = await chrome.storage.local.get("lastYouTubeSync");
+    if (last?.ok && Date.now() - last.at < 2 * 60 * 1000) return last;
+    return syncYouTubeLogin();
   };
 
   // Seeing videos on any site needs the browser's OK for all sites (asked from Settings)
@@ -189,6 +212,6 @@ var VG = (() => {
     ALL_SITES, hasAllSites, requestAllSites, mediaKey, detectedMedia, cookieTextFor,
     runCommand,
     DEFAULTS, getSettings, normalizeServer, hasAccess, requestAccess, api,
-    isActive, canPause, byPriority, formatBytes, formatDuration, PRESETS,
+    isActive, canPause, byPriority, isYouTube, freshYouTubeLogin, formatBytes, formatDuration, PRESETS,
   };
 })();

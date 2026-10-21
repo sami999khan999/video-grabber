@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Video Grabber",
   "short_name": "Video Grabber",
-  "version": "1.5.0",
+  "version": "1.6.0",
   "description": "Send videos and playlists to your Video Grabber server: pick any quality or audio only, and watch the downloads live.",
   "homepage_url": "https://github.com/sami999khan999/video-grabber",
   "icons": {
@@ -35,7 +35,8 @@
   ],
   "host_permissions": [
     "http://localhost/*",
-    "http://127.0.0.1/*"
+    "http://127.0.0.1/*",
+    "https://*.youtube.com/*"
   ],
   "optional_host_permissions": [
     "http://*/*",

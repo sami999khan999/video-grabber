@@ -25,8 +25,9 @@ progress live. Works in Chrome, Edge, Brave, Opera and Firefox.
 - **Auto-save**: downloads you start from the extension go straight to your Downloads folder.
 - **Any site** (opt-in): the video file or stream (MP4, HLS, DASH) a page plays shows up under
   *Playing on this page*, even on sites the server doesn't know.
-- **YouTube login** (opt-in): hands your YouTube login to the server when YouTube asks it to
-  "confirm you're not a bot", once or automatically. No cookies.txt export needed.
+- **YouTube login**: keeps the server on your YouTube login by itself, so your history, feeds,
+  private playlists and YouTube's "confirm you're not a bot" check just work. No cookies.txt
+  export needed.
 
 The video is downloaded by the server (yt-dlp, FFmpeg), not by the browser, so YouTube's split
 streams and signed URLs are handled the same way as in the web app.
@@ -66,20 +67,22 @@ Right-click the toolbar button → **Options** (or the gear in the popup):
 | Server address | `http://localhost:7845` | Quick picks for 7845, 8080, 8000 and 8888; any address works, e.g. `http://192.168.1.20:7845` (the browser asks once for permission) |
 | Save files when done | on | Sends finished downloads to your Downloads folder |
 | Notifications | on | Queued / ready / failed |
-| YouTube login: keep up to date | off | See [YouTube login](#youtube-login) |
+| YouTube login: keep up to date | on | See [YouTube login](#youtube-login) |
 | Detect videos on any site | off | See [Any website](#any-website) |
 | Send my login with downloads | off | See [Any website](#any-website) |
 
 ## YouTube login
 
-When YouTube asks the server to *"sign in to confirm you're not a bot"*, the server needs a YouTube
-login. **Settings → YouTube login**:
+Your history, feeds, private playlists and YouTube's *"sign in to confirm you're not a bot"* check
+need a YouTube login on the server. The extension takes care of it: it reads your youtube.com
+cookies (nothing else), checks you're logged in, and stores them on the server, in the same place a
+manual cookies.txt upload goes. It does that right after it's installed, before every YouTube
+lookup (YouTube rotates login cookies often), every 6 hours, and a minute after you log in or out.
+**Settings → YouTube login**:
 
-- **Send my YouTube login now** reads your youtube.com cookies (nothing else; the browser asks once
-  for access to YouTube), checks you're logged in, and stores them on the server, in the same place
-  a manual cookies.txt upload goes.
-- **Keep it up to date automatically** re-sends them every 6 hours, and a minute after you log in
-  or out of YouTube.
+- **Keep it up to date automatically** is on by default; turn it off to keep your login off the
+  server.
+- **Send my YouTube login now** sends it on the spot.
 - When a link hits YouTube's bot check, the popup shows a **Send my YouTube login** button that does
   it in one click and tries the link again.
 

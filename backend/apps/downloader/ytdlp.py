@@ -164,14 +164,15 @@ def mix_video_url(url: str):
 
 def playing_playlist(url: str):
     """
-    The video id of a YouTube watch link played inside a real playlist (…?v=ID&list=PL…), or
-    None. Mixes don't count: they are endless and made up on the spot.
+    The video id of a YouTube watch link played inside a playlist or a Mix
+    (…?v=ID&list=…), or None. yt-dlp lists a Mix from its watch link (what YouTube serves
+    of it, a few dozen videos); only a bare Mix link can't be opened (see mix_video_url).
     """
     parsed = urlparse(url)
     host = (parsed.hostname or "").lower()
     query = parse_qs(parsed.query)
     playlist = (query.get("list") or [""])[0]
-    if not (host == "youtube.com" or host.endswith(".youtube.com")) or not playlist or playlist.startswith("RD"):
+    if not (host == "youtube.com" or host.endswith(".youtube.com")) or not playlist:
         return None
     return (query.get("v") or [None])[0]
 

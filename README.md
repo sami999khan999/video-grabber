@@ -78,7 +78,7 @@ docker compose up -d
 | 🔀 **Parallel downloads** | Every download starts at once (or cap them with `MAX_PARALLEL_DOWNLOADS`). ⚡ Prioritize one and the others slow down so it finishes first. Pause and resume, cancel, retry or remove any of them |
 | 💾 **Straight to disk** | Finished files go to the browser's own download manager (auto-save is optional); nothing is held in browser memory |
 | 🌐 **Almost any site** | ~1,800 sites by name through yt-dlp; with the extension, also the video a page is playing on any other site (MP4, HLS, DASH), fetched with that page's headers and, if you allow it, your login for that site |
-| 🍪 **YouTube-proof** | When YouTube says *"confirm you're not a bot"*, the extension hands your YouTube login to the server (once or automatically), or you upload a `cookies.txt`; it's only used when the site insists, so it never costs you quality |
+| 🍪 **YouTube-proof** | When YouTube says *"confirm you're not a bot"*, the extension has already handed your YouTube login to the server (or you upload a `cookies.txt`); it's only used when the site insists, so it never costs you quality |
 | 📱 **Works on phones** | The whole station folds down to a single column |
 
 ## 🖼️ Screenshots
@@ -216,11 +216,10 @@ with your YouTube login (and only uses it when YouTube insists). Two ways to giv
 **Automatic, with the [browser extension](extension/)** (recommended)
 
 1. Log in to YouTube in your browser (a spare account is safest).
-2. Extension **Settings → YouTube login → Send my YouTube login now**. Only youtube.com cookies
-   are read.
-3. Switch on **Keep it up to date automatically**: it re-sends the login every 6 hours and a
-   minute after you log in or out. The popup also offers a one-click **Send my YouTube login**
-   when YouTube blocks a link.
+2. That's it: the extension sends the login to the server by itself, right after it's installed,
+   before every YouTube lookup, every 6 hours and a minute after you log in or out. Only
+   youtube.com cookies are read. The same login also opens your history, feeds and private
+   playlists. Turn it off in **Settings → YouTube login**.
 
 **Manual**
 

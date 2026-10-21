@@ -200,6 +200,7 @@ async function tune(url, { media = null, pageTune = false } = {}) {
   updateGrab();
   renderSource({ loading: url });
   try {
+    if (VG.isYouTube(media ? media.pageUrl : url)) await VG.freshYouTubeLogin();
     const cookies = await VG.cookieTextFor(media ? [media.pageUrl, media.url] : [url]);
     state.sourceExtra = { ...(media ? { headers: media.headers } : {}), ...(cookies ? { cookies } : {}) };
     const source = await VG.api("/info/", { method: "POST", body: { url, ...state.sourceExtra } });
