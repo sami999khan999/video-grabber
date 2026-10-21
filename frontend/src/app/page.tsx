@@ -179,6 +179,15 @@ export default function Home() {
 
   const active = jobs.filter(isActive);
   const live = active.length > 0;
+  const changeSpeedLimit = (kbps: number) =>
+    videoApi
+      .setSpeedLimit(kbps)
+      .then(({ speed_limit_kbps }) => {
+        queryClient.setQueryData<StationStatus>(["status"], (s) => s && { ...s, speed_limit_kbps });
+        setActionError(null);
+      })
+      .catch((err: Error) => setActionError(err.message));
+
   const speed = jobs.reduce((sum, j) => sum + (j.status === "downloading" && j.speed ? j.speed : 0), 0);
   const saved = jobs.filter((j) => j.status === "done").length;
   const failed = jobs.filter((j) => j.status === "error").length;
@@ -202,6 +211,7 @@ export default function Home() {
         saved={saved}
         speed={speed}
         speedLimit={status?.speed_limit_kbps}
+        onSpeedLimit={changeSpeedLimit}
         cookies={status?.cookies}
         onHome={reset}
         onAuth={() => setView("auth")}
@@ -279,16 +289,6 @@ export default function Home() {
                 onClear={() => remove(jobs.filter((j) => !isActive(j)), videoApi.clear())}
                 onRemoveAll={() => remove(jobs, videoApi.clear(true))}
                 onOpenCookies={() => setView("auth")}
-                speedLimit={status?.speed_limit_kbps}
-                onSpeedLimit={(kbps) =>
-                  videoApi
-                    .setSpeedLimit(kbps)
-                    .then(({ speed_limit_kbps }) => {
-                      queryClient.setQueryData<StationStatus>(["status"], (s) => s && { ...s, speed_limit_kbps });
-                      setActionError(null);
-                    })
-                    .catch((err: Error) => setActionError(err.message))
-                }
               />
             )}
             {view === "auth" && (

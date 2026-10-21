@@ -37,6 +37,9 @@ const ICONS = {
   bolt: ["M13 2 3 14h9l-1 8 10-12h-9l1-8z"],
   pause: ["M8 5v14", "M16 5v14"],
   play: ["M7 4v16l13-8z"],
+  check: ["M20 6 9 17l-5-5"],
+  chevron: ["m6 9 6 6 6-6"],
+  gauge: ["m12 14 4-4", "M3.34 19a10 10 0 1 1 17.32 0"],
 };
 
 // Only show pictures that come from a real web address
@@ -84,7 +87,7 @@ async function init() {
   $("clear-all").addEventListener("click", () =>
     removeJobs(state.jobs, VG.api("/jobs/clear/", { method: "POST", body: { all: true } })),
   );
-  $("speed-limit").addEventListener("change", (e) => setSpeedLimit(Number(e.target.value)));
+  setupSpeedMenu();
   $("link-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const link = $("link").value.trim();
@@ -627,28 +630,72 @@ const SPEED_LIMITS = [0, 256, 512, 1024, 2048, 5120, 10240, 20480, 51200];
 const formatLimit = (kbps) => (kbps < 1024 ? `${kbps} KB/s` : `${+(kbps / 1024).toFixed(1)} MB/s`);
 
 function renderSpeedLimit(kbps) {
+  state.speedLimit = kbps;
   // A limit set elsewhere that isn't one of the choices still shows
   const choices = [...new Set([...SPEED_LIMITS, kbps])].sort((a, b) => a - b);
-  $("speed-limit").replaceChildren(
-    ...choices.map((n) => h("option", { value: String(n) }, n ? `Max ${formatLimit(n)}` : "No speed limit")),
+  $("speed-list").replaceChildren(
+    ...choices.map((n) =>
+      h(
+        "li",
+        {},
+        h(
+          "button",
+          { class: "menu-item", role: "option", "aria-selected": String(n === kbps), onclick: () => pickSpeedLimit(n) },
+          h("span", {}, n ? formatLimit(n) : "No limit"),
+          n === kbps ? icon(ICONS.check) : null,
+        ),
+      ),
+    ),
   );
-  $("speed-limit").value = String(kbps);
+  $("speed-btn").replaceChildren(
+    icon(ICONS.gauge),
+    h("span", {}, kbps ? `Max ${formatLimit(kbps)}` : "No speed limit"),
+    icon(ICONS.chevron),
+  );
   $("speed-wrap").classList.toggle("on", kbps > 0);
   $("speed-wrap").hidden = false;
 }
 
-async function setSpeedLimit(kbps) {
-  $("speed-limit").disabled = true;
+function openSpeedMenu(open) {
+  $("speed-menu").hidden = !open;
+  $("speed-btn").setAttribute("aria-expanded", String(open));
+  // The current choice takes focus, so the arrow keys start from it
+  if (open) $("speed-list").querySelector('[aria-selected="true"]')?.focus();
+}
+
+function setupSpeedMenu() {
+  $("speed-btn").addEventListener("click", () => openSpeedMenu($("speed-menu").hidden));
+  document.addEventListener("pointerdown", (e) => {
+    if (!$("speed-wrap").contains(e.target)) openSpeedMenu(false);
+  });
+  $("speed-wrap").addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && !$("speed-menu").hidden) {
+      e.preventDefault();
+      openSpeedMenu(false);
+      $("speed-btn").focus();
+    }
+    if ((e.key !== "ArrowDown" && e.key !== "ArrowUp") || $("speed-menu").hidden) return;
+    e.preventDefault();
+    const items = [...$("speed-list").querySelectorAll("button")];
+    const at = items.indexOf(document.activeElement);
+    items[(at + (e.key === "ArrowDown" ? 1 : -1) + items.length) % items.length].focus();
+  });
+}
+
+async function pickSpeedLimit(kbps) {
+  openSpeedMenu(false);
+  if (kbps === state.speedLimit) return;
+  $("speed-btn").disabled = true;
   try {
     const { speed_limit_kbps } = await VG.api("/settings/", { method: "POST", body: { speed_limit_kbps: kbps } });
     renderSpeedLimit(speed_limit_kbps);
-    $("speed-wrap").title = "The most all downloads together may use";
+    $("speed-btn").title = "The most all downloads together may use";
   } catch (err) {
     // Back to what the server has, with the reason on hover
-    $("speed-wrap").title = err.message;
+    $("speed-btn").title = err.message;
     checkServer();
   } finally {
-    $("speed-limit").disabled = false;
+    $("speed-btn").disabled = false;
   }
 }
 

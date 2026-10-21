@@ -792,55 +792,156 @@ svg {
   margin-bottom: 8px;
 }
 
-/* Speed limit picker, styled like a ghost button; yellow while a limit is on */
+/* Speed limit: a ghost-button trigger and a themed menu under it; yellow while a limit is on */
 .speed {
+  position: relative;
   margin-right: auto;
-  display: inline-flex;
-  align-items: center;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: linear-gradient(180deg, #262a31, #0f1114);
-  border: var(--outline);
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.12), 0 3px 0 var(--ink);
-  font-size: 11px;
-  font-weight: 800;
 }
 
 .speed[hidden] {
   display: none;
 }
 
-.speed.on {
+.speed-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 9px 0 10px;
+  border-radius: 999px;
+  background: linear-gradient(180deg, #262a31, #0f1114);
+  border: var(--outline);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.12), 0 3px 0 var(--ink);
+  font: inherit;
+  font-size: 11px;
+  font-weight: 800;
+  color: var(--paper);
+  cursor: pointer;
+}
+
+.speed-btn:hover:not(:disabled),
+.speed-btn[aria-expanded="true"] {
+  filter: brightness(1.2);
+}
+
+.speed-btn svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 2.75;
+}
+
+.speed-btn svg:first-child {
+  color: var(--teal);
+}
+
+.speed-btn svg:last-child {
+  color: var(--muted);
+  transition: transform 0.15s;
+}
+
+.speed-btn[aria-expanded="true"] svg:last-child {
+  transform: rotate(180deg);
+}
+
+.speed.on .speed-btn,
+.speed.on .speed-btn svg:first-child {
   color: var(--yellow);
 }
 
-.speed select {
-  appearance: none;
-  background: transparent;
-  border: 0;
-  padding-right: 13px;
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%), linear-gradient(135deg, currentColor 50%, transparent 50%);
-  background-position: right 4px center, right 0 center;
-  background-size: 4px 4px;
-  background-repeat: no-repeat;
-}
-
-.speed select:focus-visible {
-  outline: none;
-}
-
-.speed:focus-within {
+.speed-btn:focus-visible {
   outline: 2px solid var(--yellow);
   outline-offset: 2px;
 }
 
-.speed option {
-  background: var(--panel);
+.menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  left: 0;
+  z-index: 30;
+  width: 190px;
+  padding: 6px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, #1d2128, #111317);
+  border: var(--outline);
+  box-shadow:
+    inset 0 0 0 1.5px rgba(255, 255, 255, 0.1),
+    0 4px 0 var(--ink),
+    0 14px 30px rgba(0, 0, 0, 0.55);
+  animation: menu-in 0.14s ease-out;
+}
+
+.menu[hidden] {
+  display: none;
+}
+
+@keyframes menu-in {
+  from {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.98);
+  }
+}
+
+.menu-head {
+  padding: 3px 9px 6px;
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.menu ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.menu-item {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 999px;
+  background: none;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 800;
   color: var(--paper);
+  cursor: pointer;
+}
+
+.menu-item:hover,
+.menu-item:focus-visible {
+  background: rgba(255, 255, 255, 0.08);
+  outline: none;
+}
+
+.menu-item[aria-selected="true"] {
+  background: linear-gradient(180deg, #ffe680, #ffc61a);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.6);
+}
+
+.menu-item[aria-selected="true"]:focus-visible {
+  outline: 2px solid var(--paper);
+  outline-offset: 1px;
+}
+
+.menu-item svg {
+  width: 13px;
+  height: 13px;
+  stroke-width: 3.25;
+}
+
+.menu-note {
+  margin: 0;
+  padding: 6px 9px 3px;
+  font-size: 10px;
+  font-weight: 600;
+  color: var(--muted);
 }
 
 .section-head {

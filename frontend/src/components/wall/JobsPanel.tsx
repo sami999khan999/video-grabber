@@ -1,7 +1,7 @@
 "use client";
 
-import { Download, Gauge, ListX, Pause, Play, RotateCcw, Trash2, TriangleAlert, X, Zap } from "lucide-react";
-import { byPriority, canPause, formatBytes, formatDuration, formatLimit, isActive, Job, saveJobFile, SPEED_LIMITS } from "@/lib/api";
+import { Download, ListX, Pause, Play, RotateCcw, Trash2, TriangleAlert, X, Zap } from "lucide-react";
+import { byPriority, canPause, formatBytes, formatDuration, isActive, Job, saveJobFile } from "@/lib/api";
 
 const LOOK: Record<Job["status"], { text: string; tone: string }> = {
   queued: { text: "Standby", tone: "is-dark" },
@@ -27,12 +27,9 @@ interface JobsPanelProps {
   onClear: () => void;
   onRemoveAll: () => void;
   onOpenCookies: () => void;
-  /** KB/s for all downloads together, 0 for none; undefined until the server has answered */
-  speedLimit?: number;
-  onSpeedLimit: (kbps: number) => void;
 }
 
-export function JobsPanel({ mode, jobs, autoSave, onAutoSave, speedLimit, onSpeedLimit, onRetry, onPrioritize, onPause, onRemove, onClear, onRemoveAll, onOpenCookies }: JobsPanelProps) {
+export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onPrioritize, onPause, onRemove, onClear, onRemoveAll, onOpenCookies }: JobsPanelProps) {
   const list = (mode === "saved" ? jobs.filter((j) => j.status === "done") : jobs.filter((j) => j.status !== "done")).sort(byPriority);
   const finished = jobs.filter((j) => !isActive(j)).length;
 
@@ -56,22 +53,6 @@ export function JobsPanel({ mode, jobs, autoSave, onAutoSave, speedLimit, onSpee
           />
           Auto-save when done
         </label>
-        {mode === "queue" && (
-          <label className="pp-select" title="The most all downloads together may use">
-            <Gauge size={14} strokeWidth={2.75} className={speedLimit ? "text-[var(--yellow)]" : undefined} />
-            <span className="sr-only">Speed limit</span>
-            <select value={speedLimit ?? 0} disabled={speedLimit === undefined} onChange={(e) => onSpeedLimit(Number(e.target.value))}>
-              {/* A limit set elsewhere (SPEED_LIMIT_KBPS or the API) that isn't one of the choices */}
-              {[...new Set([...SPEED_LIMITS, speedLimit ?? 0])]
-                .sort((a, b) => a - b)
-                .map((kbps) => (
-                  <option key={kbps} value={kbps}>
-                    {kbps ? `Max ${formatLimit(kbps)}` : "No speed limit"}
-                  </option>
-                ))}
-            </select>
-          </label>
-        )}
         <div className="ml-auto flex gap-2">
           <button className="pp-btn is-small" onClick={onClear} disabled={finished === 0}>
             <Trash2 size={14} strokeWidth={2.75} /> Clear finished
