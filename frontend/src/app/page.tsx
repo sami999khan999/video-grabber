@@ -205,6 +205,7 @@ export default function Home() {
               live={live}
               status={status}
               onPickJob={(job) => setView(job.status === "done" ? "saved" : "queue")}
+              onPrioritize={(job) => run(videoApi.prioritize(job.id, !job.priority))}
               onOpen={setView}
             />
           </div>
