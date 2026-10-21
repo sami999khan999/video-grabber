@@ -87,8 +87,14 @@ async function init() {
   $("link-form").addEventListener("submit", (e) => {
     e.preventDefault();
     const link = $("link").value.trim();
-    if (link) tune(link);
+    if (link) {
+      showTab("page");
+      tune(link);
+    }
   });
+  $("tab-page").addEventListener("click", () => showTab("page"));
+  $("tab-jobs").addEventListener("click", () => showTab("jobs"));
+  state.scrollbars = [GlassScroll.attach($("page-panel")), GlassScroll.attach($("jobs-panel"))];
 
   if (!(await VG.hasAccess(state.server))) {
     $("access").hidden = false;
@@ -300,6 +306,7 @@ async function grabMedia(media, button) {
     const { jobs } = await VG.api("/jobs/", { method: "POST", body: { items: [item] } });
     await chrome.runtime.sendMessage({ type: "track", ids: jobs.map((j) => j.id) });
     button.textContent = "Queued!";
+    setTimeout(() => showTab("jobs"), 600);
   } catch (err) {
     if (err.offline) setOffline(true);
     else renderSource({ error: err.message });
@@ -337,15 +344,24 @@ function renderSource({ loading, error, hint, settings, placeholder, source }) {
   else renderPlaylist(box, source);
 }
 
-function renderVideo(box, source) {
-  const meta = [source.uploader, source.duration ? VG.formatDuration(source.duration) : "", `${source.formats.length} formats`]
-    .filter(Boolean)
-    .join(" · ");
-  box.append(
-    h("div", { class: "thumb", style: `background-image:${safeImage(source.thumbnail)}` }, h("span", { class: "sticker yellow" }, "Single video")),
-    h("h1", { class: "title", title: source.title }, source.title),
-    h("p", { class: "meta" }, meta),
+/** Small picture beside the kind, title and details: the list below gets the room. */
+function sourceHead(source, kind, tone, meta) {
+  return h(
+    "div",
+    { class: "src-head" },
+    h("div", { class: "src-thumb", style: `background-image:${safeImage(source.thumbnail)}` }),
+    h(
+      "div",
+      { class: "src-text" },
+      h("span", { class: `sticker ${tone}` }, kind),
+      h("h1", { class: "title", title: source.title }, source.title),
+      h("p", { class: "meta" }, meta.filter(Boolean).join(" · ")),
+    ),
   );
+}
+
+function renderVideo(box, source) {
+  box.append(sourceHead(source, "Single video", "yellow", [source.uploader, source.duration ? VG.formatDuration(source.duration) : ""]));
 
   const bank = (label, formats) => {
     if (!formats.length) return;
@@ -369,9 +385,8 @@ function renderVideo(box, source) {
                 updateGrab();
               },
             },
-            h("b", {}, f.quality),
-            h("small", {}, f.note || f.ext.toUpperCase()),
-            h("small", {}, `${f.ext.toUpperCase()} · ${f.filesize ? `~${VG.formatBytes(f.filesize)}` : "size ?"}`),
+            h("span", { class: "chip-top" }, h("b", {}, f.quality), f.filesize ? h("small", { class: "size" }, `~${VG.formatBytes(f.filesize)}`) : ""),
+            h("small", {}, [f.note, f.ext.toUpperCase()].filter(Boolean).join(" · ")),
           ),
         ),
       ),
@@ -382,22 +397,13 @@ function renderVideo(box, source) {
 }
 
 function renderPlaylist(box, source) {
+  const url = source.webpage_url || "";
+  const [kind, tone] = /[?&]list=RD/.test(url) ? ["Mix", "pink"] : /youtube\.com\/(feed\/|$)/.test(url) ? ["Feed", "lime"] : ["Playlist", "teal"];
+  const count = `${source.entries.length}${source.next_start ? "+" : ""} videos`;
+  const allOn = source.entries.every((e) => state.selectedEntries.has(e.id));
+
   box.append(
-    h("div", { class: "thumb", style: `background-image:${safeImage(source.thumbnail)}` }, h("span", { class: "sticker teal" }, "Playlist")),
-    h("h1", { class: "title", title: source.title }, source.title),
-    h("p", { class: "meta" }, [source.uploader, `${source.entries.length}${source.next_start ? "+" : ""} videos`].filter(Boolean).join(" · ")),
-    // box.append would print a missing button as the text "undefined"
-    source.current
-      ? h(
-          "button",
-          {
-            class: "btn small just-playing",
-            title: "Grab only the video that was playing, with the full choice of qualities",
-            onclick: () => tune(`https://www.youtube.com/watch?v=${source.current}`),
-          },
-          "Just the playing video",
-        )
-      : "",
+    sourceHead(source, kind, tone, [source.uploader, count]),
     h("div", { class: "group-label" }, "Quality for every video"),
     h(
       "div",
@@ -418,6 +424,34 @@ function renderPlaylist(box, source) {
           p.label,
         ),
       ),
+    ),
+    h(
+      "div",
+      { class: "list-tools" },
+      h(
+        "button",
+        {
+          class: "btn ghost",
+          onclick: () => {
+            state.selectedEntries = allOn ? new Set() : new Set(source.entries.map((e) => e.id));
+            redrawSource();
+          },
+        },
+        allOn ? "Select none" : "Select all",
+      ),
+      h("span", { id: "selected-count", class: "meta" }),
+      // box.append would print a missing button as the text "undefined"
+      source.current
+        ? h(
+            "button",
+            {
+              class: "btn ghost",
+              title: "Grab only the video that was playing, with the full choice of qualities",
+              onclick: () => tune(`https://www.youtube.com/watch?v=${source.current}`),
+            },
+            "Only the playing one",
+          )
+        : "",
     ),
     h(
       "ul",
@@ -441,24 +475,45 @@ function renderPlaylist(box, source) {
                 updateGrab();
               },
             },
+            h("span", { class: "num" }, i + 1),
             h("div", { class: "mini", style: `background-image:${safeImage(entry.thumbnail)}` }),
-            entry.id === source.current && h("b", { class: "sticker yellow now" }, "Now playing"),
-            h("span", {}, `${i + 1}. ${entry.title}`),
+            h(
+              "span",
+              { class: "entry-text" },
+              h("span", { class: "entry-title" }, entry.title),
+              h(
+                "small",
+                {},
+                entry.id === source.current ? h("b", { class: "now" }, "Now playing") : "",
+                [entry.duration ? VG.formatDuration(entry.duration) : "", entry.uploader].filter(Boolean).join(" · "),
+              ),
+            ),
             h("div", { class: "check" }),
           ),
         ),
       ),
     ),
     // History, feeds and Mixes come 100 at a time
-    source.next_start ? h("button", { class: "btn small load-more", onclick: (e) => loadMore(e.currentTarget) }, "Load more") : "",
+    source.next_start
+      ? h("button", { class: "btn load-more", onclick: (e) => loadMore(e.currentTarget) }, "Load more", h("span", { class: "count" }, `${source.entries.length} shown`))
+      : "",
   );
+}
+
+/** Draw the current source again, keeping the place in the panel. */
+function redrawSource() {
+  const panel = $("page-panel");
+  const scrolled = panel.scrollTop;
+  renderSource({ source: state.source });
+  panel.scrollTop = scrolled;
+  updateGrab();
 }
 
 /** Fetch the next page of an endless list and add it below, selected like the rest. */
 async function loadMore(button) {
   const source = state.source;
   button.disabled = true;
-  button.textContent = "Loading…";
+  button.firstChild.textContent = "Loading…";
   try {
     const more = await VG.api("/info/", { method: "POST", body: { url: source.webpage_url, start: source.next_start, ...state.sourceExtra } });
     if (state.source !== source) return; // tuned to something else meanwhile
@@ -467,15 +522,10 @@ async function loadMore(button) {
     source.entries.push(...added);
     added.forEach((e) => state.selectedEntries.add(e.id));
     source.next_start = more.next_start;
-    // Redraw without losing the place in the list
-    const scrolled = $("source").querySelector(".entries")?.scrollTop ?? 0;
-    renderSource({ source });
-    const list = $("source").querySelector(".entries");
-    if (list) list.scrollTop = scrolled;
-    updateGrab();
+    redrawSource();
   } catch (err) {
     button.disabled = false;
-    button.textContent = "Load more";
+    button.firstChild.textContent = "Load more";
     button.title = err.message;
   }
 }
@@ -505,6 +555,8 @@ function pendingItems() {
 
 function updateGrab() {
   const items = state.offline ? [] : pendingItems();
+  const counter = $("selected-count");
+  if (counter && state.source?.kind === "playlist") counter.textContent = `${state.selectedEntries.size} selected`;
   $("grab").disabled = items.length === 0;
   $("grab-count").textContent = `x${items.length}`;
   $("grab-label").textContent =
@@ -519,7 +571,11 @@ async function grab() {
     const { jobs } = await VG.api("/jobs/", { method: "POST", body: { items } });
     await chrome.runtime.sendMessage({ type: "track", ids: jobs.map((j) => j.id) });
     $("grab-label").textContent = "Queued!";
-    setTimeout(updateGrab, 1200);
+    // Show them coming in
+    setTimeout(() => {
+      updateGrab();
+      showTab("jobs");
+    }, 600);
   } catch (err) {
     renderSource({ error: err.message });
     updateGrab();
@@ -560,9 +616,26 @@ const LOOK = {
   cancelled: ["Dropped", "dark"],
 };
 
+/** "page" (what this tab offers) or "jobs" (the downloads). */
+function showTab(name) {
+  const jobs = name === "jobs";
+  $("tab-page").setAttribute("aria-selected", String(!jobs));
+  $("tab-jobs").setAttribute("aria-selected", String(jobs));
+  $("page-panel").hidden = jobs;
+  $("jobs-panel").hidden = !jobs;
+  // Grabbing is about this page; the downloads have their own buttons
+  $("grab-bar").hidden = jobs;
+  state.scrollbars?.forEach((s) => s.update());
+}
+
 function renderJobs() {
   const list = $("jobs");
   const jobs = state.jobs.filter((j) => !state.removing.has(j.id)).sort(VG.byPriority).slice(0, 30);
+  const active = jobs.filter(VG.isActive).length;
+  $("jobs-count").hidden = !jobs.length;
+  // Running ones when there are any, otherwise everything listed
+  $("jobs-count").textContent = active || jobs.length;
+  $("jobs-count").classList.toggle("live", active > 0);
   $("clear").disabled = state.offline || !jobs.some((j) => !VG.isActive(j));
   $("clear-all").disabled = state.offline || !jobs.length;
   if (state.offline) {
@@ -570,7 +643,7 @@ function renderJobs() {
     return;
   }
   if (!jobs.length) {
-    list.replaceChildren(h("li", { class: "empty" }, "Dead air. Grab something!"));
+    list.replaceChildren(h("li", { class: "empty" }, "Nothing downloading. Pick something on This page and hit Grab."));
     return;
   }
   list.replaceChildren(...jobs.map(jobRow));

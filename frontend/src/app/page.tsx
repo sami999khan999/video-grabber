@@ -12,6 +12,7 @@ import { PRESETS, TunePanel } from "@/components/wall/TunePanel";
 import { TvWall } from "@/components/wall/TvWall";
 import { useJobs } from "@/hooks/use-jobs";
 import { isActive, Job, NewJob, SourceInfo, videoApi } from "@/lib/api";
+import { useGlassScrollAll } from "@/lib/glass-scroll";
 
 const AUTO_SAVE_KEY = "video-grabber:auto-save";
 const AUTO_SAVE_EVENT = "video-grabber:auto-save";
@@ -53,6 +54,7 @@ const isBotBlock = (message?: string | null) => !!message && /cookies/i.test(mes
 
 export default function Home() {
   const queryClient = useQueryClient();
+  useGlassScrollAll(".pp-scroll");
   const [view, setView] = useState<View>("tune");
   const [url, setUrl] = useState("");
   const [source, setSource] = useState<SourceInfo | null>(null);

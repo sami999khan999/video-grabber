@@ -647,6 +647,61 @@ button.pp-tv {
   scrollbar-color: #3a414b transparent;
 }
 
+/* Glass scrollbar (lib/glass-scroll.ts): the native bar goes, a frosted pill floats over the edge */
+.gs-hide-native {
+  scrollbar-width: none;
+}
+
+.gs-hide-native::-webkit-scrollbar {
+  display: none;
+}
+
+.gs-root {
+  position: absolute;
+  z-index: 5;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+
+.gs-root[data-overflow="true"][data-visible="true"] {
+  opacity: 1;
+}
+
+.gs-thumb {
+  position: absolute;
+  top: 0;
+  right: 3px;
+  width: 6px;
+  border-radius: 999px;
+  background: rgba(205, 207, 217, 0.32);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14), 0 1px 3px rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  pointer-events: auto;
+  cursor: grab;
+  will-change: transform;
+  touch-action: none;
+  transition: width 0.18s ease, right 0.18s ease, background-color 0.18s ease;
+}
+
+.gs-root[data-overflow="false"] .gs-thumb {
+  display: none;
+}
+
+/* Grows toward the content, so the outer edge stays put */
+.gs-root[data-hovering="true"] .gs-thumb,
+.gs-root[data-dragging="true"] .gs-thumb {
+  right: 2px;
+  width: 8px;
+  background: rgba(205, 207, 217, 0.55);
+}
+
+.gs-root[data-dragging="true"] .gs-thumb {
+  background: rgba(255, 212, 59, 0.75);
+  cursor: grabbing;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .pp-static,
   .pp-switch,

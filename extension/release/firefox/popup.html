@@ -22,38 +22,45 @@
       </button>
     </header>
 
-    <main>
-      <!-- Shown when the browser hasn't been allowed to talk to the server yet -->
-      <section id="access" class="card" hidden>
-        <span class="sticker pink">Permission</span>
-        <p>The extension needs your OK to talk to <b id="access-server"></b>.</p>
-        <button id="grant" class="btn yellow">Allow access</button>
-      </section>
+    <form id="link-form" class="link-form">
+      <label for="link" class="sr-only">A video or playlist link</label>
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
+      <input id="link" type="url" placeholder="Paste a video or playlist link" autocomplete="off" spellcheck="false" />
+      <button type="submit" class="btn small">Tune in</button>
+    </form>
 
-      <section id="source" class="card" aria-live="polite"></section>
+    <nav class="tabs" role="tablist" aria-label="Views">
+      <button id="tab-page" class="tab" role="tab" aria-selected="true" aria-controls="page-panel">This page</button>
+      <button id="tab-jobs" class="tab" role="tab" aria-selected="false" aria-controls="jobs-panel">
+        Downloads <span id="jobs-count" class="tab-count" hidden></span>
+      </button>
+    </nav>
 
-      <!-- Videos and streams this tab was seen playing (works on sites the server can't read) -->
-      <section id="detected" class="card" hidden aria-label="Playing on this page"></section>
+    <div class="panels">
+      <main id="page-panel" class="panel" role="tabpanel" aria-labelledby="tab-page">
+        <!-- Shown when the browser hasn't been allowed to talk to the server yet -->
+        <section id="access" class="card" hidden>
+          <span class="sticker pink">Permission</span>
+          <p>The extension needs your OK to talk to <b id="access-server"></b>.</p>
+          <button id="grant" class="btn yellow">Allow access</button>
+        </section>
 
-      <form id="link-form" class="link-form">
-        <label for="link" class="sr-only">Another video or playlist link</label>
-        <input id="link" type="url" placeholder="…or paste another link" autocomplete="off" spellcheck="false" />
-        <button type="submit" class="btn small">Tune in</button>
-      </form>
+        <section id="source" class="card" aria-live="polite"></section>
 
-      <section id="jobs-section">
-        <div class="section-head">
-          <span class="sticker teal">On air</span>
-          <span class="head-actions">
-            <button id="clear" class="btn small ghost">Clear finished</button>
-            <button id="clear-all" class="btn small ghost" title="Stop and remove every download">Remove all</button>
-          </span>
+        <!-- Videos and streams this tab was seen playing (works on sites the server can't read) -->
+        <section id="detected" class="card" hidden aria-label="Playing on this page"></section>
+      </main>
+
+      <section id="jobs-panel" class="panel" role="tabpanel" aria-labelledby="tab-jobs" hidden>
+        <div class="jobs-head">
+          <button id="clear" class="btn ghost">Clear finished</button>
+          <button id="clear-all" class="btn ghost" title="Stop and remove every download">Remove all</button>
         </div>
         <ul id="jobs" class="jobs"></ul>
       </section>
-    </main>
+    </div>
 
-    <footer class="grab-bar">
+    <footer id="grab-bar" class="grab-bar">
       <button id="grab" class="btn yellow wide" disabled>
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M13 2 3 14h9l-1 8 10-12h-9l1-8Z" /></svg>
         <span id="grab-label">Grab</span>
@@ -61,6 +68,7 @@
       </button>
     </footer>
 
+    <script src="glass-scroll.js"></script>
     <script src="shared.js"></script>
     <script src="popup.js"></script>
   </body>

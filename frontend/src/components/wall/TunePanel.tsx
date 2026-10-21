@@ -224,6 +224,7 @@ function PlaylistView({
           <li>
             <button className="pp-btn is-small w-full justify-center" onClick={onLoadMore} disabled={loadingMore}>
               {loadingMore ? "Loading…" : "Load more"}
+              <span className="pp-count">{info.entries.length} shown</span>
             </button>
           </li>
         )}
