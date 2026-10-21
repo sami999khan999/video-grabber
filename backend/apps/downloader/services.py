@@ -6,7 +6,7 @@ from yt_dlp.utils import get_compatible_ext
 
 from common.utils.log import log
 
-from .ytdlp import extract
+from .ytdlp import extract, mix_video_url
 
 
 # Lookups are reused for a while, so opening the same link again (web app, extension popup)
@@ -216,11 +216,20 @@ def _playlist_info(info: dict, url: str) -> dict:
         # Flat YouTube entries carry the id rather than a full watch link
         if not entry_url.startswith("http") and entry.get("ie_key") == "Youtube":
             entry_url = f"https://www.youtube.com/watch?v={entry_url}"
+        title = entry.get("title") or entry_url
+        # Feeds list Mixes next to videos; take the video each one starts from
+        mix_video = mix_video_url(entry_url)
+        if mix_video:
+            entry_url = mix_video
+            title = title.removeprefix("Mix - ")
+        # Other playlists and channels in a feed aren't one video each
+        elif entry.get("ie_key") == "YoutubeTab":
+            continue
         thumbnails = entry.get("thumbnails") or []
         entries.append({
             "id": entry.get("id") or entry_url,
             "url": entry_url,
-            "title": entry.get("title") or entry_url,
+            "title": title,
             "duration": entry.get("duration") or 0,
             "thumbnail": entry.get("thumbnail")
             or (thumbnails[-1].get("url") if thumbnails else ""),

@@ -11,7 +11,7 @@ from yt_dlp.utils import DownloadCancelled
 from common.utils.log import log
 
 from .politeness import gate, polite_options, retry_pause
-from .ytdlp import clean_headers, extract
+from .ytdlp import clean_headers, extract, mix_video_url
 
 # Jobs live in memory, so the app must run as a single process (threads are fine).
 # 0 starts every download straight away; a number makes the rest wait (priority ones first)
@@ -40,6 +40,13 @@ PRESETS = {
     # Converted to mp3 afterwards (see MP3_POSTPROCESSOR); any audio will do as the source
     "audio-mp3": "ba/b",
 }
+
+# The connection itself failed (a dropped link, DNS hiccup, too many at once): worth one more try
+NETWORK_ERROR = re.compile(
+    r"Network is unreachable|Failed to establish a new connection|Connection (reset|refused|aborted)"
+    r"|timed out|Temporary failure in name resolution|Name or service not known|RemoteDisconnected",
+    re.I,
+)
 
 MP3_POSTPROCESSOR = {"key": "FFmpegExtractAudio", "preferredcodec": "mp3", "preferredquality": "192"}
 
@@ -98,6 +105,10 @@ def clean_error(exc: Exception) -> str:
         return "The site says this page doesn't exist (404). Check the link."
     if "HTTP Error 403" in message:
         return "The site refused the request (403). Try again in a little while."
+    if NETWORK_ERROR.search(message):
+        host = re.search(r"host='([^']+)'", message)
+        where = f" ({host.group(1)})" if host else ""
+        return f"Couldn't connect to the site{where}: the server's internet connection dropped or timed out. Try again."
     # "[generic] abc123: Unable to ... (caused by <HTTPError ...>)" -> "Unable to ..."
     message = re.sub(r"^\[[\w:]+\]\s+[^:]+:\s*", "", message)
     message = re.sub(r"\s*\(caused by .*\)\s*$", "", message)
@@ -220,7 +231,8 @@ class JobManager:
         jobs = []
         for item in items:
             job = Job(
-                url=item["url"],
+                # Also mends Mix jobs queued before feeds turned them into videos (on retry)
+                url=mix_video_url(item["url"]) or item["url"],
                 format_id=item.get("format_id"),
                 label=item.get("label"),
                 title=item.get("title"),
@@ -394,7 +406,8 @@ class JobManager:
                            urgent=lambda: job.priority):
                 self._update(job, status="starting", stage="Resolving")
                 # YouTube now and then refuses a stream with 403 (often when several downloads of
-                # the same video run at once); a second try, after a pause, usually gets through
+                # the same video run at once), and a connection can drop; a second try, after a
+                # pause, usually gets through
                 for attempt in (1, 2):
                     try:
                         info = extract(job.url, download=True, headers=job.headers,
@@ -403,9 +416,11 @@ class JobManager:
                     except DownloadCancelled:
                         raise
                     except Exception as exc:
-                        if attempt == 2 or job.cancel_event.is_set() or "HTTP Error 403" not in str(exc):
+                        if attempt == 2 or job.cancel_event.is_set() or not (
+                            "HTTP Error 403" in str(exc) or NETWORK_ERROR.search(str(exc))
+                        ):
                             raise
-                        log("warning", f"Job {job.id}: 403, trying once more")
+                        log("warning", f"Job {job.id}: {str(exc)[:120]}, trying once more")
                         self._update(job, status="starting", stage="Retrying shortly", progress=0.0, streams_done=0)
                         retry_pause(job.cancel_event)
 

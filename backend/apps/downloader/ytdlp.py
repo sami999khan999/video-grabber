@@ -5,6 +5,7 @@ import shutil
 import tempfile
 import threading
 import time
+from urllib.parse import parse_qs, urlparse
 
 import yt_dlp
 from yt_dlp.utils import DownloadCancelled
@@ -20,6 +21,9 @@ UPLOADED_COOKIES = os.path.join(DATA_DIR, "cookies.txt")
 UPLOADED_COOKIES_META = os.path.join(DATA_DIR, "cookies.json")
 COOKIE_ORIGINS = {"file", "extension"}
 COOKIES_FILE = os.environ.get("COOKIES_FILE", "")
+# Docker networks usually have no IPv6 route; a site that answers DNS with an IPv6 address
+# then fails with "Network is unreachable". 0 lets yt-dlp try IPv6 too
+FORCE_IPV4 = os.environ.get("FORCE_IPV4", "1") != "0"
 
 MAX_COOKIES_BYTES = 1024 * 1024
 
@@ -129,6 +133,8 @@ def _options(with_cookies: bool, extra: dict) -> dict:
         "quiet": True,
         "no_warnings": True,
     }
+    if FORCE_IPV4:
+        opts["source_address"] = "0.0.0.0"
     if with_cookies:
         opts["cookiefile"] = cookiefile()
         # Some accounts only get SABR streams on the default web client (one 360p file);
@@ -136,6 +142,24 @@ def _options(with_cookies: bool, extra: dict) -> dict:
         opts["extractor_args"] = {"youtube": {"player_client": ["default", "web_safari"]}}
     opts.update(extra)
     return opts
+
+
+# A YouTube Mix is a playlist named after the video it starts from: RD<id>, RDMM<id>, RDAMVM<id>
+_MIX = re.compile(r"RD(?:MM|AMVM|EM)?([A-Za-z0-9_-]{11})")
+
+
+def mix_video_url(url: str):
+    """
+    The video a YouTube Mix link starts from, or None. A Mix can't be opened as a playlist
+    ("This playlist type is unviewable"), but the home page and other feeds list them next
+    to videos, and the video it is named after is what the user saw.
+    """
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if not (host == "youtube.com" or host.endswith(".youtube.com")) or "v" in parse_qs(parsed.query):
+        return None
+    match = _MIX.fullmatch((parse_qs(parsed.query).get("list") or [""])[0])
+    return f"https://www.youtube.com/watch?v={match.group(1)}" if match else None
 
 
 # Headers the browser extension may pass on: many sites only serve a video to requests that

@@ -180,6 +180,7 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 | `POLITE_MODE` | `1` | Pace traffic per site (below); `0` turns it off |
 | `PER_SITE_PARALLEL` | `0` | Most downloads from one site at once, in polite mode; `0` is no limit |
 | `START_GAP_MIN` / `START_GAP_MAX` | `1` / `3` | Random seconds between starting downloads from one site |
+| `FORCE_IPV4` | `1` | Connect over IPv4 only; Docker networks rarely route IPv6, which shows up as "Network is unreachable". `0` allows IPv6 |
 | `REQUEST_SLEEP` | `1` | Seconds yt-dlp waits between its own requests |
 | `FRAGMENT_PARALLEL` | `8` | Pieces of an HLS/DASH video fetched at once; higher is faster, `1` is one at a time |
 | `HTTP_CHUNK_MB` | `10` | Plain files are fetched in chunks of this size, which gets past per-request throttling; `0` turns it off |
