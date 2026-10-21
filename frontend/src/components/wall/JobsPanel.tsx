@@ -134,11 +134,11 @@ function JobRow({
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
               <div className="truncate text-[14px] font-bold" title={job.title || job.url}>{job.title || job.url}</div>
-              <div className="mt-1 flex flex-wrap items-center gap-2">
+              <div className="mt-1 flex min-w-0 items-center gap-2 whitespace-nowrap [&>*]:shrink-0">
                 <span className={`pp-sticker ${look.tone} !rotate-0 !px-1.5 !py-0 !text-[10px] !shadow-none`}>{look.text}</span>
                 {job.priority && <span className="pp-sticker is-yellow !rotate-0 !px-1.5 !py-0 !text-[10px] !shadow-none">Priority</span>}
                 <span className="rounded-md bg-white/10 px-1.5 text-[11px] font-bold uppercase">{job.label}</span>
-                {job.group && <span className="truncate text-[11px] font-semibold text-[var(--muted)]">{job.group}</span>}
+                {job.group && <span className="min-w-0 !shrink truncate text-[11px] font-semibold text-[var(--muted)]">{job.group}</span>}
               </div>
             </div>
             <div className="flex shrink-0 gap-1.5">

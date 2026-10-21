@@ -589,7 +589,6 @@ function jobRow(job) {
       "div",
       { class: "job-line" },
       h("span", { class: `sticker ${tone}` }, tag),
-      job.priority && h("span", { class: "sticker yellow" }, "Priority"),
       h("span", {}, job.label),
       h("span", { class: "info" }, info),
     ),

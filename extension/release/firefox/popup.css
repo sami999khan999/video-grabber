@@ -651,6 +651,11 @@ main {
   color: var(--muted);
 }
 
+.job-line > * {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
 .job-line .sticker {
   padding: 0 5px;
   box-shadow: none;
@@ -658,6 +663,9 @@ main {
 }
 
 .job-line .info {
+  /* Only the speed and time give way when the row is tight, cut off with an ellipsis */
+  flex: 1 1 0;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
