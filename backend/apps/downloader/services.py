@@ -13,7 +13,9 @@ from .ytdlp import extract, mix_video_url, playing_playlist
 # Lookups are reused for a while, so opening the same link again (web app, extension popup)
 # doesn't send the site another round of requests
 INFO_CACHE_SECONDS = float(os.environ.get("INFO_CACHE_MINUTES", "10")) * 60
-MIX_LENGTH = 100
+# Mixes and YouTube's feeds (history, home, subscriptions…) never end: yt-dlp would page
+# through years of history before answering. Take the newest this many
+ENDLESS_LIST_LENGTH = 100
 _info_cache = {}
 _info_lock = threading.Lock()
 
@@ -46,8 +48,8 @@ def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
     log("info", f"Extracting info for URL: {url}")
     # A video played inside a playlist or Mix brings the whole list, that video marked
     playing = playing_playlist(url)
-    # A Mix never ends (YouTube keeps serving it, repeats and all): stop after a long playlist's worth
-    mix = {"playlistend": MIX_LENGTH} if playing and "list=RD" in url else {}
+    endless = (playing and "list=RD" in url) or _is_youtube_feed(url)
+    cap = {"playlistend": ENDLESS_LIST_LENGTH} if endless else {}
     info = extract(
         url,
         headers=headers,
@@ -56,7 +58,7 @@ def _extract_video_info(url: str, headers=None, cookie_text=None) -> dict:
         noplaylist=not playing,
         # Playlists are listed without resolving every entry (fast)
         extract_flat="in_playlist",
-        **mix,
+        **cap,
     )
     log("info", "yt-dlp info extracted", payload={
         "title": info.get("title"),
@@ -212,6 +214,15 @@ def _estimate_size(f: dict, duration: float):
     if tbr and duration:
         return int(tbr * 1000 / 8 * duration)
     return None
+
+
+def _is_youtube_feed(url: str) -> bool:
+    """YouTube's home page or one of its /feed/ pages (history, subscriptions, ...)."""
+    parsed = urlparse(url)
+    host = (parsed.hostname or "").lower()
+    if not (host == "youtube.com" or host.endswith(".youtube.com")):
+        return False
+    return parsed.path in ("", "/") or parsed.path.startswith("/feed/")
 
 
 def _playlist_info(info: dict, url: str) -> dict:
