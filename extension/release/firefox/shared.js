@@ -126,10 +126,12 @@ var VG = (() => {
     return res.status === 204 ? null : res.json();
   };
 
-  const ACTIVE = ["queued", "starting", "downloading", "processing", "merging"];
+  const ACTIVE = ["queued", "starting", "downloading", "processing", "merging", "paused"];
   const isActive = (job) => ACTIVE.includes(job.status);
+  // Running or waiting, so it can still be paused (not while the file is being joined)
+  const canPause = (job) => ["queued", "starting", "downloading"].includes(job.status);
 
-  const RANK = { downloading: 0, merging: 1, processing: 1, starting: 2, queued: 3, error: 4, done: 5, cancelled: 6 };
+  const RANK = { downloading: 0, merging: 1, processing: 1, starting: 2, queued: 3, paused: 3, error: 4, done: 5, cancelled: 6 };
   // The priority download on top, then by status, newest first
   const byPriority = (a, b) =>
     Number(!!b.priority) - Number(!!a.priority) || RANK[a.status] - RANK[b.status] || b.created_at - a.created_at;
@@ -187,6 +189,6 @@ var VG = (() => {
     ALL_SITES, hasAllSites, requestAllSites, mediaKey, detectedMedia, cookieTextFor,
     runCommand,
     DEFAULTS, getSettings, normalizeServer, hasAccess, requestAccess, api,
-    isActive, byPriority, formatBytes, formatDuration, PRESETS,
+    isActive, canPause, byPriority, formatBytes, formatDuration, PRESETS,
   };
 })();

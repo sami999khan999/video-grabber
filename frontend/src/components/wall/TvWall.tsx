@@ -1,7 +1,7 @@
 "use client";
 
-import { Check, Music2, Play, TriangleAlert, Zap } from "lucide-react";
-import { ago, byPriority, formatBytes, formatDuration, isActive, Job, StationStatus } from "@/lib/api";
+import { Check, Music2, Pause, Play, TriangleAlert, Zap } from "lucide-react";
+import { ago, byPriority, canPause, formatBytes, formatDuration, isActive, Job, StationStatus } from "@/lib/api";
 
 type Filler = "static" | "bars" | "off" | { text: string; bg: string; color?: string; icon?: "play" | "music" };
 /** A set that reads out the station instead of showing a download; its filler is the idle look */
@@ -60,10 +60,11 @@ interface TvWallProps {
   status?: StationStatus;
   onPickJob: (job: Job) => void;
   onPrioritize: (job: Job) => void;
+  onPause: (job: Job) => void;
   onOpen: (view: "queue" | "saved" | "auth") => void;
 }
 
-export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, onPrioritize, onOpen }: TvWallProps) {
+export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, onPrioritize, onPause, onOpen }: TvWallProps) {
   // Live downloads get the most visible sets
   const ordered = [...jobs].sort(byPriority);
   const shown = ordered.slice(0, JOB_ORDER.length);
@@ -100,6 +101,7 @@ export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, on
                 extra={slot.id === JOB_ORDER[JOB_ORDER.length - 1] && overflow > 0 ? overflow : 0}
                 onPickJob={onPickJob}
                 onPrioritize={onPrioritize}
+                onPause={onPause}
               />
             )}
           </div>
@@ -271,6 +273,7 @@ const JOB_LOOK: Record<Job["status"], { tag: string; tone: string; led: string; 
   downloading: { tag: "Live", tone: "is-yellow", led: "#ffd43b", blink: true },
   processing: { tag: "Mixing", tone: "is-pink", led: "#9b6bff", blink: true },
   merging: { tag: "Mixing", tone: "is-pink", led: "#9b6bff", blink: true },
+  paused: { tag: "Paused", tone: "is-teal", led: "#22d3c5" },
   done: { tag: "Ready", tone: "is-lime", led: "#b6f400" },
   error: { tag: "Lost", tone: "is-red", led: "#ff3d3d" },
   cancelled: { tag: "Dropped", tone: "is-dark", led: "#59616c" },
@@ -282,12 +285,14 @@ function SmallTv({
   extra,
   onPickJob,
   onPrioritize,
+  onPause,
 }: {
   slot: Slot;
   job?: Job;
   extra: number;
   onPickJob: (job: Job) => void;
   onPrioritize: (job: Job) => void;
+  onPause: (job: Job) => void;
 }) {
   if (!job) {
     return (
@@ -301,7 +306,7 @@ function SmallTv({
   const active = isActive(job);
   const showPicture = job.thumbnail && job.status !== "error" && job.status !== "cancelled";
 
-  const canPrioritize = active && job.status !== "merging" && job.status !== "processing" && extra === 0;
+  const paused = job.status === "paused";
 
   return (
     <>
@@ -317,7 +322,7 @@ function SmallTv({
               className="pp-screen-fill pp-thumb"
               style={{
                 backgroundImage: `url("${job.thumbnail}")`,
-                filter: job.status === "queued" ? "grayscale(1) brightness(0.55)" : undefined,
+                filter: job.status === "queued" || paused ? "grayscale(1) brightness(0.55)" : undefined,
               }}
             />
           ) : (
@@ -354,20 +359,41 @@ function SmallTv({
         </div>
       </TvBody>
       {/* Next to the set, not inside it: the set itself is already a button */}
-      {canPrioritize && (
-        <button
-          className={`absolute right-[1%] top-[1%] z-4 flex aspect-square h-[24%] min-h-6 items-center justify-center rounded-full border-2 border-[var(--ink)] shadow-[2px_2px_0_#08090b] ${
-            job.priority ? "bg-[var(--yellow)] text-[#08090b]" : "bg-[#1d232b] text-white hover:text-[var(--yellow)]"
-          }`}
-          onClick={() => onPrioritize(job)}
-          aria-label={job.priority ? "Stop prioritizing" : "Prioritize"}
-          aria-pressed={job.priority}
-          title={job.priority ? "Stop prioritizing" : "Prioritize: download this one first, slow the others down"}
-        >
-          <Zap className="h-[55%] w-[55%]" strokeWidth={3} fill={job.priority ? "currentColor" : "none"} />
-        </button>
+      {extra === 0 && (canPause(job) || paused) && (
+        <div className="absolute right-[1%] top-[1%] z-4 flex h-[24%] min-h-6 gap-[0.3em]">
+          <SetButton
+            on={paused}
+            onClick={() => onPause(job)}
+            label={paused ? "Resume" : "Pause"}
+            icon={paused ? <Play className="h-[55%] w-[55%]" strokeWidth={3} fill="currentColor" /> : <Pause className="h-[55%] w-[55%]" strokeWidth={3} />}
+          />
+          {canPause(job) && (
+            <SetButton
+              on={job.priority}
+              onClick={() => onPrioritize(job)}
+              label={job.priority ? "Stop prioritizing" : "Prioritize: download this one first, slow the others down"}
+              icon={<Zap className="h-[55%] w-[55%]" strokeWidth={3} fill={job.priority ? "currentColor" : "none"} />}
+            />
+          )}
+        </div>
       )}
     </>
+  );
+}
+
+function SetButton({ on, onClick, label, icon }: { on: boolean; onClick: () => void; label: string; icon: React.ReactNode }) {
+  return (
+    <button
+      className={`flex aspect-square h-full items-center justify-center rounded-full border-2 border-[var(--ink)] shadow-[2px_2px_0_#08090b] ${
+        on ? "bg-[var(--yellow)] text-[#08090b]" : "bg-[#1d232b] text-white hover:text-[var(--yellow)]"
+      }`}
+      onClick={onClick}
+      aria-label={label}
+      aria-pressed={on}
+      title={label}
+    >
+      {icon}
+    </button>
   );
 }
 

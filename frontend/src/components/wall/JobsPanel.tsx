@@ -1,7 +1,7 @@
 "use client";
 
-import { Download, ListX, RotateCcw, Trash2, TriangleAlert, X, Zap } from "lucide-react";
-import { byPriority, formatBytes, formatDuration, isActive, Job, saveJobFile } from "@/lib/api";
+import { Download, ListX, Pause, Play, RotateCcw, Trash2, TriangleAlert, X, Zap } from "lucide-react";
+import { byPriority, canPause, formatBytes, formatDuration, isActive, Job, saveJobFile } from "@/lib/api";
 
 const LOOK: Record<Job["status"], { text: string; tone: string }> = {
   queued: { text: "Standby", tone: "is-dark" },
@@ -9,6 +9,7 @@ const LOOK: Record<Job["status"], { text: string; tone: string }> = {
   downloading: { text: "Live", tone: "is-yellow" },
   processing: { text: "Mixing", tone: "is-pink" },
   merging: { text: "Mixing", tone: "is-pink" },
+  paused: { text: "Paused", tone: "is-teal" },
   done: { text: "Ready", tone: "is-lime" },
   error: { text: "Lost", tone: "is-red" },
   cancelled: { text: "Dropped", tone: "is-dark" },
@@ -21,13 +22,14 @@ interface JobsPanelProps {
   onAutoSave: (value: boolean) => void;
   onRetry: (job: Job) => void;
   onPrioritize: (job: Job) => void;
+  onPause: (job: Job) => void;
   onRemove: (job: Job) => void;
   onClear: () => void;
   onRemoveAll: () => void;
   onOpenCookies: () => void;
 }
 
-export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onPrioritize, onRemove, onClear, onRemoveAll, onOpenCookies }: JobsPanelProps) {
+export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onPrioritize, onPause, onRemove, onClear, onRemoveAll, onOpenCookies }: JobsPanelProps) {
   const list = (mode === "saved" ? jobs.filter((j) => j.status === "done") : jobs.filter((j) => j.status !== "done")).sort(byPriority);
   const finished = jobs.filter((j) => !isActive(j)).length;
 
@@ -71,7 +73,7 @@ export function JobsPanel({ mode, jobs, autoSave, onAutoSave, onRetry, onPriorit
       ) : (
         <ul className="pp-scroll -mr-2 min-h-0 flex-1 space-y-2.5 overflow-y-auto pr-2">
           {list.map((job) => (
-            <JobRow key={job.id} job={job} onRetry={onRetry} onPrioritize={onPrioritize} onRemove={onRemove} onOpenCookies={onOpenCookies} />
+            <JobRow key={job.id} job={job} onRetry={onRetry} onPrioritize={onPrioritize} onPause={onPause} onRemove={onRemove} onOpenCookies={onOpenCookies} />
           ))}
         </ul>
       )}
@@ -83,12 +85,14 @@ function JobRow({
   job,
   onRetry,
   onPrioritize,
+  onPause,
   onRemove,
   onOpenCookies,
 }: {
   job: Job;
   onRetry: (job: Job) => void;
   onPrioritize: (job: Job) => void;
+  onPause: (job: Job) => void;
   onRemove: (job: Job) => void;
   onOpenCookies: () => void;
 }) {
@@ -113,7 +117,11 @@ function JobRow({
           ? "Joining video and sound"
           : job.status === "queued"
             ? job.stage || "Waiting for a free slot"
-            : "";
+            : job.status === "paused"
+              ? [job.total_bytes ? `${formatBytes(job.downloaded_bytes)} / ${formatBytes(job.total_bytes)}` : "", "picks up where it stopped"]
+                  .filter(Boolean)
+                  .join(" · ")
+              : "";
 
   return (
     <li className="rounded-2xl border-[2.5px] border-[var(--ink)] bg-[linear-gradient(180deg,#1d232b,#12161b)] p-2.5 shadow-[inset_0_0_0_1.5px_rgba(255,255,255,0.06)]">
@@ -139,7 +147,17 @@ function JobRow({
                   <Download size={15} strokeWidth={3} />
                 </button>
               )}
-              {active && !mixing && (
+              {(canPause(job) || job.status === "paused") && (
+                <button
+                  className={`pp-btn is-icon ${job.status === "paused" ? "is-yellow" : ""}`}
+                  onClick={() => onPause(job)}
+                  aria-label={job.status === "paused" ? "Resume" : "Pause"}
+                  title={job.status === "paused" ? "Resume" : "Pause"}
+                >
+                  {job.status === "paused" ? <Play size={15} strokeWidth={2.75} /> : <Pause size={15} strokeWidth={2.75} />}
+                </button>
+              )}
+              {canPause(job) && (
                 <button
                   className={`pp-btn is-icon ${job.priority ? "is-yellow" : ""}`}
                   onClick={() => onPrioritize(job)}

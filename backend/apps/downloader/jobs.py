@@ -28,7 +28,8 @@ DOWNLOAD_DIR = os.environ.get("DOWNLOAD_DIR") or os.path.join(
     tempfile.gettempdir(), "video-grabber"
 )
 
-ACTIVE = {"queued", "starting", "downloading", "processing", "merging"}
+# Paused jobs keep their partial files and pick up where they stopped when resumed
+ACTIVE = {"queued", "starting", "downloading", "processing", "merging", "paused"}
 FINISHED = {"done", "error", "cancelled"}
 
 # Video joins the AAC track when there is one, so most downloads fit in mp4
@@ -135,6 +136,8 @@ class Job:
         self.finished_at = None
         # The one download the user wants first: it skips the line and the others slow down
         self.priority = False
+        # Set (with cancel_event) to stop the download but keep its partial files for a resume
+        self.pausing = False
         self.cancel_event = threading.Event()
         # (time, bytes) the background speed limit counts from
         self.throttle_mark = None
@@ -264,10 +267,44 @@ class JobManager:
         job = self.get(job_id)
         if not job or job.status in FINISHED:
             return job
+        job.pausing = False
         job.cancel_event.set()
-        # A job still waiting in line never starts
-        if self._unqueue(job):
+        # A job still waiting in line never starts; a paused one has no thread to clean up after it
+        if self._unqueue(job) or job.status == "paused":
+            shutil.rmtree(job.dir, ignore_errors=True)
             self._update(job, status="cancelled", finished_at=time.time())
+        return job
+
+    def pause(self, job_id):
+        """Stop a download but keep what it has so far. Not while it joins or converts the file."""
+        job = self.get(job_id)
+        if not job or job.status not in ("queued", "starting", "downloading"):
+            return job
+        job.pausing = True
+        job.cancel_event.set()
+        # Still waiting in line: nothing runs to notice, so it's paused right away
+        if self._unqueue(job):
+            self._update(job, status="paused", stage="", speed=None, eta=None)
+        else:
+            self._touch()
+        return job
+
+    def resume(self, job_id):
+        """Put a paused download back in line; yt-dlp continues from the partial files."""
+        with self._cond:
+            job = self._jobs.get(job_id)
+            if not job or job.status != "paused":
+                return job
+            job.pausing = False
+            job.cancel_event.clear()
+            # yt-dlp reports streams that are already complete as finished again
+            job.streams_done = 0
+            job.status = "queued"
+            job.stage = ""
+            self._waiting.append(job)
+            self._version += 1
+            self._cond.notify_all()
+        self._dispatch()
         return job
 
     def prioritize(self, job_id, on=True):
@@ -298,7 +335,7 @@ class JobManager:
             job.cancel_event.set()
             # A job still waiting in line never starts; a running one deletes
             # its own folder when it notices the cancel
-            if self._unqueue(job) or job.status in FINISHED:
+            if self._unqueue(job) or job.status in FINISHED or job.status == "paused":
                 leftovers.append(job.dir)
         self._touch()
         if leftovers:
@@ -412,6 +449,7 @@ class JobManager:
                 eta=None,
                 notice=notice,
                 priority=False,
+                pausing=False,
                 finished_at=time.time(),
                 # The login was only needed to fetch the file
                 cookie_text=None,
@@ -421,6 +459,11 @@ class JobManager:
             if self.get(job.id) is None:
                 shutil.rmtree(job.dir, ignore_errors=True)
         except Exception as exc:
+            if job.pausing and self.get(job.id) is not None:
+                # Keep the partial files: a resume continues from them
+                self._update(job, status="paused", stage="", speed=None, eta=None)
+                log("info", f"Job {job.id}: paused")
+                return
             shutil.rmtree(job.dir, ignore_errors=True)
             if job.cancel_event.is_set() or isinstance(exc, DownloadCancelled):
                 self._update(job, status="cancelled", stage="", speed=None, eta=None,

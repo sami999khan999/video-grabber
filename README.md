@@ -75,7 +75,7 @@ docker compose up -d
 | 🎧 **Audio only** | Original AAC (M4A) or Opus, or converted to MP3 at 192 kbps |
 | 📼 **Playlists** | Lists every video with thumbnails; tick the ones you want, pick one quality cap for all of them and queue them in one go |
 | 📡 **Live progress** | Server-Sent Events push percent, size, speed, ETA, which stream (video, then audio) and the merge / convert step |
-| 🔀 **Parallel downloads** | Every download starts at once (or cap them with `MAX_PARALLEL_DOWNLOADS`). ⚡ Prioritize one and the others slow down so it finishes first. Cancel, retry or remove any of them |
+| 🔀 **Parallel downloads** | Every download starts at once (or cap them with `MAX_PARALLEL_DOWNLOADS`). ⚡ Prioritize one and the others slow down so it finishes first. Pause and resume, cancel, retry or remove any of them |
 | 💾 **Straight to disk** | Finished files go to the browser's own download manager (auto-save is optional); nothing is held in browser memory |
 | 🌐 **Almost any site** | ~1,800 sites by name through yt-dlp; with the extension, also the video a page is playing on any other site (MP4, HLS, DASH), fetched with that page's headers and, if you allow it, your login for that site |
 | 🍪 **YouTube-proof** | When YouTube says *"confirm you're not a bot"*, the extension hands your YouTube login to the server (once or automatically), or you upload a `cookies.txt`; it's only used when the site insists, so it never costs you quality |
@@ -248,6 +248,7 @@ Base URL `/api`, JSON bodies.
 | `POST` | `/jobs/:id/cancel/` | | Stops a job, keeps it listed |
 | `POST` | `/jobs/:id/retry/` | | Replaces a failed or cancelled job |
 | `POST` | `/jobs/:id/priority/` | `{ on? }` | Makes this the one download that goes first; the rest slow down (`on: false` undoes it) |
+| `POST` | `/jobs/:id/pause/` · `/jobs/:id/resume/` | | Stops a download but keeps the partial file; resume continues from it |
 | `DELETE` | `/jobs/:id/` | | Cancels if needed, removes the job and its file |
 | `POST` | `/jobs/clear/` | | Removes finished, failed and cancelled jobs |
 | `GET` | `/jobs/:id/file/` | | The finished file |

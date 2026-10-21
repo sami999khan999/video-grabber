@@ -35,6 +35,8 @@ const ICONS = {
   cancel: ["M18 6 6 18", "M6 6l12 12"],
   retry: ["M3 12a9 9 0 1 0 3-6.7L3 8", "M3 3v5h5"],
   bolt: ["M13 2 3 14h9l-1 8 10-12h-9l1-8z"],
+  pause: ["M8 5v14", "M16 5v14"],
+  play: ["M7 4v16l13-8z"],
 };
 
 // Only show pictures that come from a real web address
@@ -510,6 +512,7 @@ const LOOK = {
   downloading: ["Live", "yellow"],
   processing: ["Mixing", "pink"],
   merging: ["Mixing", "pink"],
+  paused: ["Paused", "teal"],
   done: ["Ready", "lime"],
   error: ["Lost", "red"],
   cancelled: ["Dropped", "dark"],
@@ -546,7 +549,9 @@ function jobRow(job) {
           ? job.stage
           : job.status === "queued"
             ? job.stage || "waiting for a slot"
-            : "";
+            : job.status === "paused"
+              ? "picks up where it stopped"
+              : "";
 
   const button = (title, iconName, onclick, extra = {}) =>
     h("button", { class: "icon-btn", title, "aria-label": title, onclick, ...extra }, icon(ICONS[iconName]));
@@ -559,8 +564,14 @@ function jobRow(job) {
     h(
       "div",
       { class: "job-actions" },
-      active &&
-        !mixing &&
+      (VG.canPause(job) || job.status === "paused") &&
+        button(
+          job.status === "paused" ? "Resume" : "Pause",
+          job.status === "paused" ? "play" : "pause",
+          () => run(VG.api(`/jobs/${job.id}/${job.status === "paused" ? "resume" : "pause"}/`, { method: "POST" })),
+          { class: `icon-btn ${job.status === "paused" ? "on" : ""}` },
+        ),
+      VG.canPause(job) &&
         button(
           job.priority ? "Stop prioritizing" : "Prioritize: download this one first, slow the others down",
           "bolt",

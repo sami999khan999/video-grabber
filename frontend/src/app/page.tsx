@@ -206,6 +206,7 @@ export default function Home() {
               status={status}
               onPickJob={(job) => setView(job.status === "done" ? "saved" : "queue")}
               onPrioritize={(job) => run(videoApi.prioritize(job.id, !job.priority))}
+              onPause={(job) => run(job.status === "paused" ? videoApi.resume(job.id) : videoApi.pause(job.id))}
               onOpen={setView}
             />
           </div>
@@ -248,6 +249,7 @@ export default function Home() {
                 onAutoSave={changeAutoSave}
                 onRetry={(job) => run(videoApi.retry(job.id), true)}
                 onPrioritize={(job) => run(videoApi.prioritize(job.id, !job.priority))}
+                onPause={(job) => run(job.status === "paused" ? videoApi.resume(job.id) : videoApi.pause(job.id))}
                 onRemove={(job) => remove([job], videoApi.remove(job.id))}
                 onClear={() => remove(jobs.filter((j) => !isActive(j)), videoApi.clear())}
                 onRemoveAll={() => remove(jobs, videoApi.clear(true))}

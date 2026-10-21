@@ -161,6 +161,22 @@ class JobCancelView(APIView):
         return Response(job.to_dict())
 
 
+class JobPauseView(APIView):
+    """
+    POST /api/jobs/<id>/pause/  -> stop downloading but keep the partial file
+    POST /api/jobs/<id>/resume/ -> continue where it stopped
+    """
+
+    action = "pause"
+
+    def post(self, request, job_id):
+        manager = get_manager()
+        job = manager.pause(job_id) if self.action == "pause" else manager.resume(job_id)
+        if not job:
+            return Response({"error": "Job not found."}, status=status.HTTP_404_NOT_FOUND)
+        return Response(job.to_dict())
+
+
 class JobPriorityView(APIView):
     """
     POST /api/jobs/<id>/priority/ -> make this the download that goes first and fastest

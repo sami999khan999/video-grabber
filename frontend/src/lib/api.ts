@@ -51,6 +51,7 @@ export type JobStatus =
   | "downloading"
   | "processing"
   | "merging"
+  | "paused"
   | "done"
   | "error"
   | "cancelled";
@@ -100,7 +101,9 @@ export interface StationStatus {
   cookies_detail: { origin: "file" | "extension"; updated_at: number; count: number | null } | null;
 }
 
-export const ACTIVE_STATUSES: JobStatus[] = ["queued", "starting", "downloading", "processing", "merging"];
+export const ACTIVE_STATUSES: JobStatus[] = ["queued", "starting", "downloading", "processing", "merging", "paused"];
+/** Running or waiting, so it can still be paused (not while the file is being joined) */
+export const canPause = (job: Job) => ["queued", "starting", "downloading"].includes(job.status);
 export const isActive = (job: Job) => ACTIVE_STATUSES.includes(job.status);
 
 // The priority download on top, then live downloads, mixing, waiting and finished; newest first within each group
@@ -110,6 +113,7 @@ const STATUS_RANK: Record<JobStatus, number> = {
   processing: 1,
   starting: 2,
   queued: 3,
+  paused: 3,
   error: 4,
   done: 5,
   cancelled: 6,
@@ -156,6 +160,8 @@ export const videoApi = {
 
   cancel: (id: string) => request<Job>(`/jobs/${id}/cancel/`, { method: "POST" }, "Failed to cancel."),
   retry: (id: string) => request<Job>(`/jobs/${id}/retry/`, { method: "POST" }, "Failed to retry."),
+  pause: (id: string) => request<Job>(`/jobs/${id}/pause/`, { method: "POST" }, "Failed to pause."),
+  resume: (id: string) => request<Job>(`/jobs/${id}/resume/`, { method: "POST" }, "Failed to resume."),
   prioritize: (id: string, on = true) =>
     request<Job>(`/jobs/${id}/priority/`, { method: "POST", body: JSON.stringify({ on }) }, "Failed to change priority."),
   remove: (id: string) => request<void>(`/jobs/${id}/`, { method: "DELETE" }, "Failed to remove."),
