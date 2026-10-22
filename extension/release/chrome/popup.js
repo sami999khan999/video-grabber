@@ -137,17 +137,23 @@ async function init() {
 async function checkServer() {
   try {
     const status = await VG.api("/status/");
-    $("link-dot").className = "dot ok";
+    setLink(true);
     const parallel = status.max_parallel ? `${status.max_parallel} parallel` : "all at once";
     $("link-dot").title = `Connected · ${parallel} · ${status.cookies ? "cookies on" : "no cookies"}`;
     // Servers older than the speed limit don't send it
     if (status.speed_limit_kbps != null) renderSpeedLimit(status.speed_limit_kbps);
   } catch (err) {
-    $("link-dot").className = "dot bad";
+    setLink(false);
     $("link-dot").title = err.message;
     if (err.offline) setOffline(true);
     else renderSource({ error: err.message });
   }
+}
+
+/** The Live / Offline pill in the header. */
+function setLink(ok) {
+  $("link-dot").className = `dot ${ok ? "ok" : "bad"}`;
+  $("link-text").textContent = ok ? "Live" : "Offline";
 }
 
 function setOffline(on) {
@@ -329,7 +335,14 @@ function renderSource({ loading, error, hint, settings, placeholder, source }) {
     return;
   }
   if (placeholder) {
-    box.append(h("div", { class: "placeholder" }, placeholder));
+    box.append(
+      h(
+        "div",
+        { class: "placeholder" },
+        h("div", { class: "tv big" }, h("div", { class: "tv-screen static" }, h("span", { class: "sticker light" }, "No signal")), tvFoot()),
+        h("p", {}, placeholder),
+      ),
+    );
     return;
   }
   if (error) {
@@ -350,12 +363,15 @@ function renderSource({ loading, error, hint, settings, placeholder, source }) {
   else renderPlaylist(box, source);
 }
 
+/** Knobs and a red light under a TV screen. */
+const tvFoot = () => h("div", { class: "tv-foot" }, h("span", { class: "knob" }), h("span", { class: "led" }), h("span", { class: "knob" }));
+
 /** Small picture beside the kind, title and details: the list below gets the room. */
 function sourceHead(source, kind, tone, meta) {
   return h(
     "div",
     { class: "src-head" },
-    h("div", { class: "src-thumb", style: `background-image:${safeImage(source.thumbnail)}` }),
+    h("div", { class: `tv ${tone}` }, h("div", { class: "tv-screen", style: `background-image:${safeImage(source.thumbnail)}` }), tvFoot()),
     h(
       "div",
       { class: "src-text" },
@@ -595,11 +611,11 @@ function connectJobs() {
   state.stream = stream;
   // EventSource keeps retrying while the server is down; its first success means it's back
   stream.onopen = () => {
-    $("link-dot").className = "dot ok";
+    setLink(true);
     if (state.offline) reconnect();
   };
   stream.onerror = () => {
-    $("link-dot").className = "dot bad";
+    setLink(false);
     if (stream.readyState !== EventSource.OPEN) setOffline(true);
   };
   stream.onmessage = (event) => {
@@ -721,11 +737,11 @@ function renderJobs() {
   $("clear").disabled = state.offline || !jobs.some((j) => !VG.isActive(j));
   $("clear-all").disabled = state.offline || !jobs.length;
   if (state.offline) {
-    list.replaceChildren(h("li", { class: "empty" }, "Server offline. Downloads show up here once it's back."));
+    list.replaceChildren(h("li", { class: "empty" }, h("span", { class: "sticker red" }, "Off air"), h("span", {}, "Server offline. Downloads show up here once it's back.")));
     return;
   }
   if (!jobs.length) {
-    list.replaceChildren(h("li", { class: "empty" }, "Nothing downloading. Pick something on This page and hit Grab."));
+    list.replaceChildren(h("li", { class: "empty" }, h("span", { class: "sticker dark" }, "Dead air"), h("span", {}, "Nothing downloading. Pick something on This page and hit Grab.")));
     return;
   }
   list.replaceChildren(...jobs.map(jobRow));

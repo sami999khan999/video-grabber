@@ -9,12 +9,13 @@
       /* One background for the whole window (the popup's is sized for a small fixed box) */
       html {
         min-height: 100%;
-        background:
-          radial-gradient(ellipse 70% 45% at 50% 0%, rgba(80, 220, 230, 0.28), transparent 70%),
-          linear-gradient(180deg, #0b4a57, #062430 45%, #031419) fixed;
+        background: #062430;
       }
       body {
+        display: block;
         width: auto;
+        height: auto;
+        overflow: visible;
         max-width: 560px;
         max-height: none;
         min-height: 100vh;
@@ -35,7 +36,10 @@
         overflow-wrap: anywhere;
       }
       h1 {
-        margin: 0 0 4px;
+        margin: 6px 0 4px;
+      }
+      h1.title {
+        font-size: 30px;
       }
       label.field {
         display: block;
@@ -129,6 +133,7 @@
     </style>
   </head>
   <body>
+    <div class="stage" aria-hidden="true"></div>
     <div class="card">
       <span class="sticker yellow">Settings</span>
       <h1 class="title">Video Grabber</h1>

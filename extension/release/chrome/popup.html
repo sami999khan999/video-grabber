@@ -7,13 +7,20 @@
     <link rel="stylesheet" href="popup.css" />
   </head>
   <body>
+    <!-- The station's backdrop: teal spotlight, halftone dots, a tilted outline word -->
+    <div class="stage" aria-hidden="true"></div>
+    <div class="watermark" aria-hidden="true">ON AIR</div>
+
     <header class="bar">
       <img src="icons/icon-48.png" alt="" class="logo" />
       <div class="brand">
-        <strong>Video Grabber</strong>
+        <strong class="gold">Video Grabber</strong>
         <span id="server-label" class="muted"></span>
       </div>
-      <span id="link-dot" class="dot" title="Server status"></span>
+      <span class="pill" title="Server status">
+        <span id="link-dot" class="dot"></span>
+        <span id="link-text">…</span>
+      </span>
       <button id="open-station" class="icon-btn" title="Open the station in a tab" aria-label="Open the station in a tab">
         <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 3h7v7M21 3l-9 9M19 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2h5" /></svg>
       </button>
@@ -29,10 +36,16 @@
       <button type="submit" class="btn small">Tune in</button>
     </form>
 
+    <!-- Like the station's side rail: colored tiles with a sticker name -->
     <nav class="tabs" role="tablist" aria-label="Views">
-      <button id="tab-page" class="tab" role="tab" aria-selected="true" aria-controls="page-panel">This page</button>
-      <button id="tab-jobs" class="tab" role="tab" aria-selected="false" aria-controls="jobs-panel">
-        Downloads <span id="jobs-count" class="tab-count" hidden></span>
+      <button id="tab-page" class="tab tune" role="tab" aria-selected="true" aria-controls="page-panel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.5.5l3-3a5 5 0 0 0-7-7l-1.7 1.7" /><path d="M14 11a5 5 0 0 0-7.5-.5l-3 3a5 5 0 0 0 7 7l1.7-1.7" /></svg>
+        <span class="tab-name">This page</span>
+      </button>
+      <button id="tab-jobs" class="tab air" role="tab" aria-selected="false" aria-controls="jobs-panel">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M21 15V6" /><path d="M18.5 18a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z" /><path d="M12 12H3" /><path d="M16 6H3" /><path d="M12 18H3" /></svg>
+        <span class="tab-name">On air</span>
+        <span id="jobs-count" class="tab-count" hidden></span>
       </button>
     </nav>
 
@@ -52,6 +65,10 @@
       </main>
 
       <section id="jobs-panel" class="panel" role="tabpanel" aria-labelledby="tab-jobs" hidden>
+        <div class="panel-title">
+          <span class="sticker teal">On air</span>
+          <h2 class="gold">Coming in</h2>
+        </div>
         <div class="jobs-head">
           <div id="speed-wrap" class="speed" hidden>
             <button id="speed-btn" class="speed-btn" aria-haspopup="listbox" aria-expanded="false" title="The most all downloads together may use"></button>
