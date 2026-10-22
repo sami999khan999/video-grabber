@@ -349,10 +349,17 @@ function renderSource({ loading, error, hint, settings, placeholder, source }) {
     const cookies = /cookies/i.test(error) && /bot|sign/i.test(error);
     box.append(
       ...[
-        h("div", { class: "error" }, error),
+        // Color bars and a gold headline, like a channel that lost its signal
+        h(
+          "div",
+          { class: "lost" },
+          h("div", { class: "tv big red" }, h("div", { class: "tv-screen bars" }, h("span", { class: "sticker red" }, "Lost")), tvFoot()),
+          h("h1", { class: "title" }, cookies ? "YouTube wants a login" : "No signal here"),
+          h("p", { class: "lost-msg" }, error),
+        ),
         cookies && h("p", { class: "meta" }, "The server needs your YouTube login. The extension can send it from this browser:"),
         cookies && h("button", { class: "btn small yellow", onclick: (e) => sendYouTubeLogin(e.currentTarget) }, "Send my YouTube login"),
-        hint && h("p", { class: "meta" }, hint),
+        hint && h("p", { class: "tip" }, h("span", { class: "sticker yellow" }, "Tip"), h("span", {}, hint)),
         settings && h("button", { class: "btn small yellow", onclick: () => chrome.runtime.openOptionsPage() }, "Open Settings"),
       ].filter(Boolean),
     );

@@ -445,6 +445,7 @@ svg {
 .tv.teal { --tv: #4fd8cf; }
 .tv.pink { --tv: #ff7fb4; }
 .tv.lime { --tv: #c6f53a; }
+.tv.red { --tv: #ff6b6b; }
 
 .tv-screen {
   position: relative;
@@ -486,6 +487,38 @@ svg {
   25% { background-position: -40px 30px; }
   50% { background-position: 35px -50px; }
   75% { background-position: -60px -20px; }
+}
+
+/* Test-card color bars, for a page with nothing to tune in */
+.tv-screen.bars {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(
+    90deg,
+    #c0c0c0 0 14.28%,
+    #c0c000 14.28% 28.57%,
+    #00c0c0 28.57% 42.85%,
+    #00c000 42.85% 57.14%,
+    #c000c0 57.14% 71.42%,
+    #c00000 71.42% 85.71%,
+    #0000c0 85.71% 100%
+  );
+}
+
+.tv-screen.bars::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 22%;
+  background: linear-gradient(90deg, #0000c0 0 20%, #111 20% 40%, #c000c0 40% 60%, #111 60% 80%, #00c0c0 80%);
+}
+
+.tv-screen .sticker {
+  position: relative;
+  z-index: 1;
 }
 
 .tv-foot {
@@ -783,6 +816,40 @@ svg {
   position: relative;
   z-index: 1;
   background: var(--paper);
+}
+
+/* A page that couldn't be tuned in */
+.lost {
+  text-align: center;
+}
+
+.lost .title {
+  font-size: 21px;
+}
+
+.lost-msg {
+  margin: 6px 6px 0;
+  color: #c9d2dc;
+  /* Long links have no spaces to wrap at */
+  overflow-wrap: anywhere;
+}
+
+.tip {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 12px 0 0;
+  padding: 9px 10px;
+  border-radius: 12px;
+  border: 2px dashed rgba(255, 212, 59, 0.35);
+  background: rgba(255, 212, 59, 0.06);
+  color: #e6e0c8;
+  font-size: 12px;
+  text-align: left;
+}
+
+.tip .sticker {
+  flex-shrink: 0;
 }
 
 .error {
