@@ -7,10 +7,14 @@ progress live. Works in Chrome, Edge, Brave, Opera and Firefox.
 <p>
   <img src="../docs/screenshots/extension-video.png" alt="Popup on a video: every quality from 4K down, plus audio" width="250">
   <img src="../docs/screenshots/extension-playlist.png" alt="Popup on a playlist: one quality for all" width="250">
-  <img src="../docs/screenshots/extension-live.png" alt="Popup with downloads in progress" width="250">
+  <img src="../docs/screenshots/extension-live.png" alt="On air tab: downloads in progress, one with priority" width="250">
 </p>
 <p>
+  <img src="../docs/screenshots/extension-speed.png" alt="Speed limit menu in the On air tab" width="250">
+  <img src="../docs/screenshots/extension-lost.png" alt="A page that can't be read: color bars, Lost sticker and a tip" width="250">
   <img src="../docs/screenshots/extension-offline.png" alt="Popup when the server is off" width="250">
+</p>
+<p>
   <img src="../docs/screenshots/extension-settings.png" alt="Settings: server address and quick picks for common ports" width="506">
 </p>
 

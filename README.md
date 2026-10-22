@@ -104,6 +104,11 @@ docker compose up -d
 </table>
 
 <p align="center">
+  <img src="docs/screenshots/speed.png" alt="Speed limit menu under the total speed in the top bar">
+  <br><b>Speed limit</b><br><sub>click the total speed in the top bar; running downloads follow straight away</sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshots/mobile.png" alt="The station on a phone" width="300">
 </p>
 
@@ -120,24 +125,32 @@ page**, ready to grab. DRM-protected services (Netflix, Spotify…) stay out of 
 
 <table>
   <tr>
-    <td align="center" width="33%"><img src="docs/screenshots/extension-video.png" alt="Popup on a video: every quality from 4K down, plus audio" width="260"></td>
-    <td align="center" width="33%"><img src="docs/screenshots/extension-playlist.png" alt="Popup on a playlist: one quality for all, pick the videos" width="260"></td>
-    <td align="center" width="33%"><img src="docs/screenshots/extension-live.png" alt="Popup with downloads coming in live" width="260"></td>
+    <td align="center" width="33%"><img src="docs/screenshots/extension-video.png" alt="Popup on a video: every quality from 4K down, plus audio, the picture in a little TV" width="260"></td>
+    <td align="center" width="33%"><img src="docs/screenshots/extension-playlist.png" alt="Popup on a YouTube Mix: one quality for all, switches to pick the videos" width="260"></td>
+    <td align="center" width="33%"><img src="docs/screenshots/extension-live.png" alt="On air tab: downloads coming in live, one with priority" width="260"></td>
   </tr>
   <tr>
     <td align="center"><b>Any quality</b><br><sub>reads the tab you're on</sub></td>
-    <td align="center"><b>Playlists</b><br><sub>one quality, Grab ×N</sub></td>
-    <td align="center"><b>Live progress</b><br><sub>2 per site, the rest on standby</sub></td>
+    <td align="center"><b>Playlists &amp; Mixes</b><br><sub>one quality, Grab ×N</sub></td>
+    <td align="center"><b>On air</b><br><sub>pause, ⚡ prioritize, remove</sub></td>
   </tr>
   <tr>
+    <td align="center"><img src="docs/screenshots/extension-speed.png" alt="Speed limit menu in the On air tab" width="260"></td>
+    <td align="center"><img src="docs/screenshots/extension-lost.png" alt="A page that can't be read: color bars, Lost sticker and a tip" width="260"></td>
     <td align="center"><img src="docs/screenshots/extension-anysite.png" alt="Popup on an unsupported site: the video the page plays, ready to grab" width="260"></td>
-    <td align="center"><img src="docs/screenshots/extension-offline.png" alt="Popup when the server is off: how to start it, reconnects by itself" width="260"></td>
-    <td align="center"><img src="docs/screenshots/extension-settings.png" alt="Extension settings: server address with quick picks for common ports" width="260"></td>
   </tr>
   <tr>
+    <td align="center"><b>Speed limit</b><br><sub>for all downloads together</sub></td>
+    <td align="center"><b>No signal</b><br><sub>says why, and what to try</sub></td>
     <td align="center"><b>Any site</b><br><sub>grabs what the page is playing</sub></td>
+  </tr>
+  <tr>
+    <td align="center"><img src="docs/screenshots/extension-offline.png" alt="Popup when the server is off: how to start it, reconnects by itself" width="260"></td>
+    <td align="center" colspan="2"><img src="docs/screenshots/extension-settings.png" alt="Extension settings: server address with quick picks for common ports" width="520"></td>
+  </tr>
+  <tr>
     <td align="center"><b>Server off</b><br><sub>start command, reconnects by itself</sub></td>
-    <td align="center"><b>Settings</b><br><sub>port quick picks, any-site switches</sub></td>
+    <td align="center" colspan="2"><b>Settings</b><br><sub>port quick picks, YouTube login, any-site switches</sub></td>
   </tr>
 </table>
 
