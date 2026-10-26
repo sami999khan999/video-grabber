@@ -8,20 +8,28 @@
     <style>
       /* One background for the whole window (the popup's is sized for a small fixed box) */
       html {
-        min-height: 100%;
+        height: 100%;
         background: #062430;
       }
+      /* The page scrolls inside #page, so the glass scrollbar can sit over its edge */
       body {
+        position: relative;
         display: block;
         width: auto;
-        height: auto;
-        overflow: visible;
+        height: 100%;
+        overflow: hidden;
+        background: none;
+      }
+      #page {
+        position: absolute;
+        inset: 0;
+        z-index: 1;
+        overflow-y: auto;
+      }
+      .page-inner {
         max-width: 560px;
-        max-height: none;
-        min-height: 100vh;
         margin: 0 auto;
         padding: 32px 16px;
-        background: none;
       }
       pre {
         margin: 8px 0 0;
@@ -134,93 +142,98 @@
   </head>
   <body>
     <div class="stage" aria-hidden="true"></div>
-    <div class="card">
-      <span class="sticker yellow">Settings</span>
-      <h1 class="title">Video Grabber</h1>
-      <p class="meta">The extension sends links to your Video Grabber server and shows its downloads.</p>
+    <div id="page">
+      <div class="page-inner">
+        <div class="card">
+          <span class="sticker yellow">Settings</span>
+          <h1 class="title">Video Grabber</h1>
+          <p class="meta">The extension sends links to your Video Grabber server and shows its downloads.</p>
 
-      <form id="form">
-        <label class="field" for="server">Server address</label>
-        <div class="row">
-          <input id="server" type="url" required placeholder="http://localhost:7845" />
-          <button type="button" id="test" class="btn small">Test</button>
+          <form id="form">
+            <label class="field" for="server">Server address</label>
+            <div class="row">
+              <input id="server" type="url" required placeholder="http://localhost:7845" />
+              <button type="button" id="test" class="btn small">Test</button>
+            </div>
+            <!-- Right under the address, so Test's answer is in view -->
+            <div id="server-result" class="inline-result" aria-live="polite"></div>
+            <div class="ports" aria-label="Quick picks">
+              <span class="meta">Quick picks:</span>
+              <button type="button" class="chip" data-server="http://localhost:7845">:7845 <small>default</small></button>
+              <button type="button" class="chip" data-server="http://localhost:8080">:8080</button>
+              <button type="button" class="chip" data-server="http://localhost:8000">:8000</button>
+              <button type="button" class="chip" data-server="http://localhost:8888">:8888</button>
+            </div>
+            <p class="meta">
+              Where the container listens. The default <code>7845</code> is rarely used by other
+              software; <code>8080</code>, <code>8000</code> and <code>8888</code> are common choices but
+              often taken by other dev tools. Another computer works too, e.g.
+              <code>http://192.168.1.20:7845</code>. Don't have one running? Start it with:
+            </p>
+            <pre id="run-command"></pre>
+
+            <label class="toggle"><input id="autoSave" type="checkbox" /> Save files to Downloads as soon as they finish</label>
+            <label class="toggle"><input id="notify" type="checkbox" /> Show a notification when a download is queued, done or fails</label>
+
+            <div class="save-row">
+              <button type="submit" class="btn yellow">Save settings</button>
+              <span id="save-result" aria-live="polite"></span>
+            </div>
+          </form>
         </div>
-        <!-- Right under the address, so Test's answer is in view -->
-        <div id="server-result" class="inline-result" aria-live="polite"></div>
-        <div class="ports" aria-label="Quick picks">
-          <span class="meta">Quick picks:</span>
-          <button type="button" class="chip" data-server="http://localhost:7845">:7845 <small>default</small></button>
-          <button type="button" class="chip" data-server="http://localhost:8080">:8080</button>
-          <button type="button" class="chip" data-server="http://localhost:8000">:8000</button>
-          <button type="button" class="chip" data-server="http://localhost:8888">:8888</button>
+
+        <div class="card" id="youtube">
+          <span class="sticker pink">YouTube login</span>
+          <p class="meta">
+            Your history, feeds, private playlists and YouTube's <b>"sign in to confirm you're not a
+            bot"</b> check need your YouTube login on the server. The extension hands it over by itself
+            from this browser, no cookies.txt export needed: before every YouTube lookup, every 6 hours,
+            and a minute after you log in or out. Only youtube.com cookies are read, and the server only
+            uses them when YouTube insists. A spare account is safest.
+          </p>
+          <p id="yt-status" class="meta"></p>
+          <div class="row" style="align-items: center">
+            <button type="button" id="yt-sync" class="btn yellow">Send my YouTube login now</button>
+          </div>
+          <div id="yt-result" class="inline-result" aria-live="polite"></div>
+          <label class="toggle"><input id="syncYouTube" type="checkbox" /> Keep it up to date automatically</label>
+          <p class="meta hint">
+            On by default. Turn it off to keep your login off the server.
+          </p>
+          <p class="meta">
+            Prefer doing it by hand? Upload a cookies.txt in the station's <b>Cookies</b> tab instead;
+            both end up in the same place on the server.
+          </p>
         </div>
-        <p class="meta">
-          Where the container listens. The default <code>7845</code> is rarely used by other
-          software; <code>8080</code>, <code>8000</code> and <code>8888</code> are common choices but
-          often taken by other dev tools. Another computer works too, e.g.
-          <code>http://192.168.1.20:7845</code>. Don't have one running? Start it with:
-        </p>
-        <pre id="run-command"></pre>
 
-        <label class="toggle"><input id="autoSave" type="checkbox" /> Save files to Downloads as soon as they finish</label>
-        <label class="toggle"><input id="notify" type="checkbox" /> Show a notification when a download is queued, done or fails</label>
+        <div class="card">
+          <span class="sticker lime">Any website</span>
+          <p class="meta">
+            The server knows about 1,800 video sites by name. These two switches let the extension
+            grab from almost any other site too. Both are off until you turn them on.
+          </p>
 
-        <div class="save-row">
-          <button type="submit" class="btn yellow">Save settings</button>
-          <span id="save-result" aria-live="polite"></span>
+          <label class="toggle"><input id="detect" type="checkbox" /> Detect videos playing on any site</label>
+          <p class="meta hint">
+            The extension notices the video files and streams (MP4, HLS, DASH) a page plays and lists
+            them in the popup under <b>Playing on this page</b>. Your browser will ask to allow access
+            to all sites; nothing is sent anywhere until you press Grab.
+          </p>
+
+          <label class="toggle"><input id="sendCookies" type="checkbox" /> Send my login for that site with each download</label>
+          <p class="meta hint">
+            For videos that only play while you're logged in. Your cookies for that one site go to
+            your Video Grabber server with the download, are used for it, and are deleted right after;
+            they're never stored or shown. Only turn this on if the server is your own, because
+            whoever runs it could use them.
+          </p>
+          <div id="any-result" aria-live="polite"></div>
         </div>
-      </form>
-    </div>
-
-    <div class="card" id="youtube">
-      <span class="sticker pink">YouTube login</span>
-      <p class="meta">
-        Your history, feeds, private playlists and YouTube's <b>"sign in to confirm you're not a
-        bot"</b> check need your YouTube login on the server. The extension hands it over by itself
-        from this browser, no cookies.txt export needed: before every YouTube lookup, every 6 hours,
-        and a minute after you log in or out. Only youtube.com cookies are read, and the server only
-        uses them when YouTube insists. A spare account is safest.
-      </p>
-      <p id="yt-status" class="meta"></p>
-      <div class="row" style="align-items: center">
-        <button type="button" id="yt-sync" class="btn yellow">Send my YouTube login now</button>
       </div>
-      <div id="yt-result" class="inline-result" aria-live="polite"></div>
-      <label class="toggle"><input id="syncYouTube" type="checkbox" /> Keep it up to date automatically</label>
-      <p class="meta hint">
-        On by default. Turn it off to keep your login off the server.
-      </p>
-      <p class="meta">
-        Prefer doing it by hand? Upload a cookies.txt in the station's <b>Cookies</b> tab instead;
-        both end up in the same place on the server.
-      </p>
-    </div>
-
-    <div class="card">
-      <span class="sticker lime">Any website</span>
-      <p class="meta">
-        The server knows about 1,800 video sites by name. These two switches let the extension
-        grab from almost any other site too. Both are off until you turn them on.
-      </p>
-
-      <label class="toggle"><input id="detect" type="checkbox" /> Detect videos playing on any site</label>
-      <p class="meta hint">
-        The extension notices the video files and streams (MP4, HLS, DASH) a page plays and lists
-        them in the popup under <b>Playing on this page</b>. Your browser will ask to allow access
-        to all sites; nothing is sent anywhere until you press Grab.
-      </p>
-
-      <label class="toggle"><input id="sendCookies" type="checkbox" /> Send my login for that site with each download</label>
-      <p class="meta hint">
-        For videos that only play while you're logged in. Your cookies for that one site go to
-        your Video Grabber server with the download, are used for it, and are deleted right after;
-        they're never stored or shown. Only turn this on if the server is your own, because
-        whoever runs it could use them.
-      </p>
-      <div id="any-result" aria-live="polite"></div>
     </div>
 
     <script src="shared.js"></script>
+    <script src="glass-scroll.js"></script>
     <script src="options.js"></script>
   </body>
 </html>

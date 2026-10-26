@@ -196,3 +196,4 @@ async function loadYouTube() {
 load();
 loadAny();
 loadYouTube();
+GlassScroll.attach($("page"));
