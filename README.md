@@ -146,7 +146,7 @@ page**, ready to grab. DRM-protected services (Netflix, Spotify…) stay out of 
   </tr>
   <tr>
     <td align="center"><img src="docs/screenshots/extension-offline.png" alt="Popup when the server is off: how to start it, reconnects by itself" width="260"></td>
-    <td align="center" colspan="2"><img src="docs/screenshots/extension-settings.png" alt="Extension settings: server address with quick picks for common ports" width="520"></td>
+    <td align="center" colspan="2"><img src="docs/screenshots/extension-settings.png" alt="Extension settings on one screen: server, start command, downloads, YouTube login and any website" width="520"></td>
   </tr>
   <tr>
     <td align="center"><b>Server off</b><br><sub>start command, reconnects by itself</sub></td>

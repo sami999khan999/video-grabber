@@ -26,69 +26,76 @@
         z-index: 1;
         overflow-y: auto;
       }
-      .page-inner {
-        max-width: 560px;
+      body > .gs-root {
+        position: absolute;
+      }
+
+      /* --- bento: tiles of different sizes, so it all fits on one screen --------- */
+
+      .bento {
+        display: grid;
+        grid-template-columns: repeat(6, minmax(0, 1fr));
+        gap: 14px;
+        max-width: 1080px;
         margin: 0 auto;
-        padding: 32px 16px;
+        padding: 28px 20px;
       }
-      pre {
-        margin: 8px 0 0;
-        padding: 10px 12px;
-        overflow-x: auto;
-        border-radius: 10px;
-        border: 2px solid #08090b;
-        background: #0a0c0f;
-        color: #f4f1e8;
-        font-size: 12px;
-        white-space: pre-wrap;
-        overflow-wrap: anywhere;
-      }
-      h1 {
-        margin: 6px 0 4px;
-      }
-      h1.title {
-        font-size: 30px;
-      }
-      label.field {
-        display: block;
-        margin: 16px 0 6px;
-        font-weight: 900;
-      }
-      .row {
+      .bento > .card {
         display: flex;
-        gap: 8px;
-        flex-wrap: wrap;
-      }
-      .row input[type="url"] {
-        flex: 1;
-        min-width: 220px;
-        height: 40px;
-        padding: 0 14px;
-        border-radius: 999px;
-        background: #0a0c0f;
-        border: var(--outline);
-        color: var(--paper);
-        font: inherit;
-      }
-      .toggle {
-        display: flex;
-        align-items: center;
+        flex-direction: column;
         gap: 10px;
-        margin-top: 14px;
-        cursor: pointer;
+        margin: 0;
+        padding: 16px;
       }
-      .inline-result:empty {
+      /* The hazard stripes stay on the header; the tiles have their stickers */
+      .bento > .card:not(.hero)::before {
         display: none;
       }
-      .inline-result {
-        margin-top: 8px;
+      .bento > .card::before {
+        margin: -16px -16px 0;
+      }
+      .bento p {
+        margin: 0;
+      }
+      .span-6 { grid-column: span 6; }
+      .span-4 { grid-column: span 4; }
+      .span-2 { grid-column: span 2; }
+      @media (max-width: 900px) {
+        .bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .span-6, .span-4 { grid-column: span 2; }
+        .span-2 { grid-column: span 1; }
+      }
+      @media (max-width: 600px) {
+        .bento { grid-template-columns: minmax(0, 1fr); padding: 16px; }
+        .span-6, .span-4, .span-2 { grid-column: span 1; }
+      }
+
+      .tile-head {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 8px;
+      }
+      .bento > .card > .sticker,
+      .tile-head .sticker {
+        align-self: flex-start;
+      }
+
+      .hero-row {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px 20px;
+      }
+      h1.title {
+        margin: 4px 0 2px;
+        font-size: 32px;
       }
       .save-row {
         display: flex;
-        flex-wrap: wrap;
         align-items: center;
         gap: 12px;
-        margin-top: 18px;
       }
       #save-result {
         font-weight: 800;
@@ -99,19 +106,123 @@
       #save-result.bad-text {
         color: #ffc2c2;
       }
-      .card + .card {
-        margin-top: 16px;
+
+      .row {
+        display: flex;
+        gap: 8px;
       }
-      .hint {
-        margin: 4px 0 0 28px;
+      .row input[type="url"] {
+        flex: 1;
+        min-width: 0;
+        height: 40px;
+        padding: 0 14px;
+        border-radius: 999px;
+        background: #0a0c0f;
+        border: var(--outline);
+        color: var(--paper);
+        font: inherit;
       }
-      .toggle input {
-        width: 18px;
-        height: 18px;
-        accent-color: #ffd43b;
+      .ports {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 6px;
       }
-      #result {
-        margin-top: 14px;
+      .ports .chip {
+        flex-direction: row;
+        align-items: baseline;
+        gap: 5px;
+        padding: 4px 10px;
+      }
+      pre {
+        margin: 0;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 2px solid #08090b;
+        background: #0a0c0f;
+        color: #f4f1e8;
+        font-size: 12px;
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+      }
+      code {
+        padding: 1px 5px;
+        border-radius: 5px;
+        background: rgba(255, 255, 255, 0.08);
+      }
+      .foot {
+        margin-top: auto !important;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+
+      /* On/off switch with its label and a line under it */
+      .switch {
+        display: flex;
+        align-items: flex-start;
+        gap: 10px;
+        cursor: pointer;
+      }
+      .switch input {
+        appearance: none;
+        position: relative;
+        width: 38px;
+        height: 22px;
+        margin: 0;
+        flex-shrink: 0;
+        border-radius: 999px;
+        border: 2px solid var(--ink);
+        background: #0a0c0f;
+        box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.1);
+        cursor: pointer;
+      }
+      .switch input::after {
+        content: "";
+        position: absolute;
+        top: 3px;
+        left: 3px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: #59616c;
+        transition: transform 0.18s, background 0.18s;
+      }
+      .switch input:checked {
+        background: #2a2a10;
+      }
+      .switch input:checked::after {
+        transform: translateX(16px);
+        background: var(--yellow);
+      }
+      .switch input:focus-visible {
+        outline: 2px solid var(--yellow);
+        outline-offset: 2px;
+      }
+      .switch span > b {
+        display: block;
+        font-weight: 800;
+      }
+      .switch small {
+        display: block;
+        margin-top: 2px;
+        color: #c9d2dc;
+        font-size: 11.5px;
+        font-weight: 600;
+      }
+      .switches {
+        display: grid;
+        gap: 12px;
+      }
+      .switches.two {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 12px 20px;
+      }
+      @media (max-width: 600px) {
+        .switches.two { grid-template-columns: minmax(0, 1fr); }
+      }
+
+      .inline-result:empty {
+        display: none;
       }
       .ok {
         padding: 8px 10px;
@@ -120,116 +231,116 @@
         background: rgba(182, 244, 0, 0.1);
         color: #e4ff9e;
       }
-      .ports {
-        display: flex;
-        flex-wrap: wrap;
-        align-items: center;
-        gap: 6px;
-        margin-top: 10px;
-      }
-      .ports .chip {
-        flex-direction: row;
-        align-items: baseline;
-        gap: 5px;
-        padding: 4px 10px;
-      }
-      code {
-        padding: 1px 5px;
-        border-radius: 5px;
-        background: rgba(255, 255, 255, 0.08);
-      }
     </style>
   </head>
   <body>
     <div class="stage" aria-hidden="true"></div>
     <div id="page">
-      <div class="page-inner">
-        <div class="card">
-          <span class="sticker yellow">Settings</span>
-          <h1 class="title">Video Grabber</h1>
-          <p class="meta">The extension sends links to your Video Grabber server and shows its downloads.</p>
-
-          <form id="form">
-            <label class="field" for="server">Server address</label>
-            <div class="row">
-              <input id="server" type="url" required placeholder="http://localhost:7845" />
-              <button type="button" id="test" class="btn small">Test</button>
+      <!-- One form, so Save (in the header) and Enter in the address both save -->
+      <form id="form" class="bento">
+        <header class="card hero span-6">
+          <div class="hero-row">
+            <div>
+              <span class="sticker yellow">Settings</span>
+              <h1 class="title">Video Grabber</h1>
+              <p class="meta">The extension sends links to your Video Grabber server and shows its downloads.</p>
             </div>
-            <!-- Right under the address, so Test's answer is in view -->
-            <div id="server-result" class="inline-result" aria-live="polite"></div>
-            <div class="ports" aria-label="Quick picks">
-              <span class="meta">Quick picks:</span>
-              <button type="button" class="chip" data-server="http://localhost:7845">:7845 <small>default</small></button>
-              <button type="button" class="chip" data-server="http://localhost:8080">:8080</button>
-              <button type="button" class="chip" data-server="http://localhost:8000">:8000</button>
-              <button type="button" class="chip" data-server="http://localhost:8888">:8888</button>
-            </div>
-            <p class="meta">
-              Where the container listens. The default <code>7845</code> is rarely used by other
-              software; <code>8080</code>, <code>8000</code> and <code>8888</code> are common choices but
-              often taken by other dev tools. Another computer works too, e.g.
-              <code>http://192.168.1.20:7845</code>. Don't have one running? Start it with:
-            </p>
-            <pre id="run-command"></pre>
-
-            <label class="toggle"><input id="autoSave" type="checkbox" /> Save files to Downloads as soon as they finish</label>
-            <label class="toggle"><input id="notify" type="checkbox" /> Show a notification when a download is queued, done or fails</label>
-
             <div class="save-row">
-              <button type="submit" class="btn yellow">Save settings</button>
               <span id="save-result" aria-live="polite"></span>
+              <button type="submit" class="btn yellow">Save settings</button>
             </div>
-          </form>
-        </div>
+          </div>
+        </header>
 
-        <div class="card" id="youtube">
+        <section class="card span-4">
+          <span class="sticker teal">Server</span>
+          <div class="row">
+            <input id="server" type="url" required placeholder="http://localhost:7845" aria-label="Server address" />
+            <button type="button" id="test" class="btn small">Test</button>
+          </div>
+          <!-- Right under the address, so Test's answer is in view -->
+          <div id="server-result" class="inline-result" aria-live="polite"></div>
+          <div class="ports" aria-label="Quick picks">
+            <span class="meta">Quick picks:</span>
+            <button type="button" class="chip" data-server="http://localhost:7845">:7845 <small>default</small></button>
+            <button type="button" class="chip" data-server="http://localhost:8080">:8080</button>
+            <button type="button" class="chip" data-server="http://localhost:8000">:8000</button>
+            <button type="button" class="chip" data-server="http://localhost:8888">:8888</button>
+          </div>
+          <p class="meta foot">
+            Where the container listens. Another computer works too, e.g.
+            <code>http://192.168.1.20:7845</code>.
+          </p>
+        </section>
+
+        <section class="card span-2">
+          <span class="sticker dark">Not running?</span>
+          <p class="meta">Start the server with:</p>
+          <pre id="run-command"></pre>
+          <p class="meta foot">
+            <code>7845</code> is rarely taken; <code>8080</code>, <code>8000</code> and
+            <code>8888</code> often are by other dev tools.
+          </p>
+        </section>
+
+        <section class="card span-2">
+          <span class="sticker yellow">Downloads</span>
+          <div class="switches">
+            <label class="switch">
+              <input id="autoSave" type="checkbox" />
+              <span><b>Save to Downloads</b><small>As soon as a file is done.</small></span>
+            </label>
+            <label class="switch">
+              <input id="notify" type="checkbox" />
+              <span><b>Notifications</b><small>When a download is queued, done or fails.</small></span>
+            </label>
+          </div>
+        </section>
+
+        <section class="card span-4" id="youtube">
           <span class="sticker pink">YouTube login</span>
           <p class="meta">
-            Your history, feeds, private playlists and YouTube's <b>"sign in to confirm you're not a
-            bot"</b> check need your YouTube login on the server. The extension hands it over by itself
-            from this browser, no cookies.txt export needed: before every YouTube lookup, every 6 hours,
-            and a minute after you log in or out. Only youtube.com cookies are read, and the server only
-            uses them when YouTube insists. A spare account is safest.
+            History, feeds, private playlists and YouTube's <b>"confirm you're not a bot"</b> check
+            need your login on the server. The extension hands it over from this browser: before
+            YouTube lookups, every 6 hours and after you log in or out. Only youtube.com cookies are
+            read. A spare account is safest.
           </p>
           <p id="yt-status" class="meta"></p>
-          <div class="row" style="align-items: center">
-            <button type="button" id="yt-sync" class="btn yellow">Send my YouTube login now</button>
+          <div class="hero-row">
+            <label class="switch">
+              <input id="syncYouTube" type="checkbox" />
+              <span><b>Keep it up to date</b><small>Off keeps your login off the server.</small></span>
+            </label>
+            <button type="button" id="yt-sync" class="btn yellow small">Send it now</button>
           </div>
           <div id="yt-result" class="inline-result" aria-live="polite"></div>
-          <label class="toggle"><input id="syncYouTube" type="checkbox" /> Keep it up to date automatically</label>
-          <p class="meta hint">
-            On by default. Turn it off to keep your login off the server.
-          </p>
-          <p class="meta">
-            Prefer doing it by hand? Upload a cookies.txt in the station's <b>Cookies</b> tab instead;
-            both end up in the same place on the server.
-          </p>
-        </div>
+          <p class="meta foot">Or upload a cookies.txt in the station's <b>Cookies</b> tab; both end up in the same place.</p>
+        </section>
 
-        <div class="card">
-          <span class="sticker lime">Any website</span>
-          <p class="meta">
-            The server knows about 1,800 video sites by name. These two switches let the extension
-            grab from almost any other site too. Both are off until you turn them on.
-          </p>
-
-          <label class="toggle"><input id="detect" type="checkbox" /> Detect videos playing on any site</label>
-          <p class="meta hint">
-            The extension notices the video files and streams (MP4, HLS, DASH) a page plays and lists
-            them in the popup under <b>Playing on this page</b>. Your browser will ask to allow access
-            to all sites; nothing is sent anywhere until you press Grab.
-          </p>
-
-          <label class="toggle"><input id="sendCookies" type="checkbox" /> Send my login for that site with each download</label>
-          <p class="meta hint">
-            For videos that only play while you're logged in. Your cookies for that one site go to
-            your Video Grabber server with the download, are used for it, and are deleted right after;
-            they're never stored or shown. Only turn this on if the server is your own, because
-            whoever runs it could use them.
-          </p>
-          <div id="any-result" aria-live="polite"></div>
-        </div>
-      </div>
+        <section class="card span-6">
+          <div class="tile-head">
+            <span class="sticker lime">Any website</span>
+            <span class="meta">The server knows about 1,800 sites by name. These grab from almost any other. Both start off.</span>
+          </div>
+          <div class="switches two">
+            <label class="switch">
+              <input id="detect" type="checkbox" />
+              <span>
+                <b>Detect videos playing on any site</b>
+                <small>Lists the files and streams (MP4, HLS, DASH) a page plays under <b>Playing on this page</b>. The browser asks for access to all sites; nothing is sent until you press Grab.</small>
+              </span>
+            </label>
+            <label class="switch">
+              <input id="sendCookies" type="checkbox" />
+              <span>
+                <b>Send my login for that site</b>
+                <small>For videos that only play logged in. That site's cookies go with the download and are deleted after. Only on a server that's your own.</small>
+              </span>
+            </label>
+          </div>
+          <div id="any-result" class="inline-result" aria-live="polite"></div>
+        </section>
+      </form>
     </div>
 
     <script src="shared.js"></script>

@@ -15,7 +15,7 @@ progress live. Works in Chrome, Edge, Brave, Opera and Firefox.
   <img src="../docs/screenshots/extension-offline.png" alt="Popup when the server is off" width="250">
 </p>
 <p>
-  <img src="../docs/screenshots/extension-settings.png" alt="Settings: server address and quick picks for common ports" width="506">
+  <img src="../docs/screenshots/extension-settings.png" alt="Settings on one screen: server, start command, downloads, YouTube login and any website" width="640">
 </p>
 
 ## What it does
