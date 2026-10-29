@@ -68,6 +68,12 @@ const state = {
   allSites: false,
   // Jobs removed here that the server may still be listing
   removing: new Set(),
+  // The source is this tab's page (or the video it plays), so it's kept for the next opening
+  remember: false,
+  // When the source was looked up
+  sourceAt: 0,
+  // The playlist "Only the playing one" left, with its choices, to go back to without a lookup
+  parent: null,
 };
 
 // --- start-up ------------------------------------------------------------------
@@ -130,7 +136,9 @@ async function init() {
     });
   }
   const isWebPage = /^https?:\/\//.test(state.tabUrl) && !state.tabUrl.startsWith(state.server);
-  if (isWebPage) tune(state.tabUrl, { pageTune: true });
+  const saved = isWebPage && (await recallPage());
+  if (saved) await restorePage(saved);
+  else if (isWebPage) tune(state.tabUrl, { pageTune: true });
   else renderSource({ placeholder: "Open a video or playlist page, or paste a link below." });
 }
 
@@ -209,12 +217,16 @@ function openStation() {
 
 /**
  * Look a link up on the server. `media` is a stream this tab was seen playing: it carries the
- * page's headers, and its title (yt-dlp only sees a file name there).
+ * page's headers, and its title (yt-dlp only sees a file name there). `parent` is the playlist
+ * this video was picked from.
  */
-async function tune(url, { media = null, pageTune = false } = {}) {
+async function tune(url, { media = null, pageTune = false, parent = null } = {}) {
   state.lastUrl = url;
   if (state.offline) return;
   state.source = null;
+  state.parent = null;
+  // A video picked from a remembered playlist is remembered in its place
+  state.remember = pageTune || (!!parent && state.remember);
   updateGrab();
   renderSource({ loading: url });
   try {
@@ -226,7 +238,10 @@ async function tune(url, { media = null, pageTune = false } = {}) {
       source.title = media.title || source.title;
       source.webpage_url = media.url;
     }
+    if (state.lastUrl !== url) return; // tuned to something else meanwhile
     state.source = source;
+    state.sourceAt = Date.now();
+    state.parent = parent;
     if (source.kind === "video") {
       state.selectedFormats = new Set(source.formats.length ? [source.formats[0].format_id] : []);
     } else {
@@ -391,6 +406,15 @@ function sourceHead(source, kind, tone, meta) {
 
 function renderVideo(box, source) {
   box.append(sourceHead(source, "Single video", "yellow", [source.uploader, source.duration ? VG.formatDuration(source.duration) : ""]));
+  if (state.parent) {
+    box.append(
+      h(
+        "div",
+        { class: "list-tools" },
+        h("button", { class: "btn ghost", title: state.parent.source.title, onclick: backToPlaylist }, "Back to the whole list"),
+      ),
+    );
+  }
 
   const bank = (label, formats) => {
     if (!formats.length) return;
@@ -476,7 +500,10 @@ function renderPlaylist(box, source) {
             {
               class: "btn ghost",
               title: "Grab only the video that was playing, with the full choice of qualities",
-              onclick: () => tune(`https://www.youtube.com/watch?v=${source.current}`),
+              onclick: () =>
+                tune(`https://www.youtube.com/watch?v=${source.current}`, {
+                  parent: { source, selectedEntries: [...state.selectedEntries], preset: state.preset, at: state.sourceAt, lastUrl: state.lastUrl },
+                }),
             },
             "Only the playing one",
           )
@@ -527,6 +554,64 @@ function renderPlaylist(box, source) {
       ? h("button", { class: "btn load-more", onclick: (e) => loadMore(e.currentTarget) }, "Load more", h("span", { class: "count" }, `${source.entries.length} shown`))
       : "",
   );
+}
+
+/** Show the playlist "Only the playing one" came from again, as it was left. */
+function backToPlaylist() {
+  const { source, selectedEntries, preset, at, lastUrl } = state.parent;
+  state.parent = null;
+  state.source = source;
+  state.sourceAt = at;
+  state.lastUrl = lastUrl;
+  state.selectedEntries = new Set(selectedEntries);
+  state.preset = preset;
+  renderSource({ source });
+  updateGrab();
+}
+
+// --- memory -------------------------------------------------------------------
+// What this tab's page was looked up as, and the choices made there: opening the popup again
+// shows it at once instead of asking the server (and the site) for it again
+
+const PAGE_MEMORY_MS = 10 * 60 * 1000;
+
+async function recallPage() {
+  if (state.tabId == null) return null;
+  const key = VG.pageKey(state.tabId);
+  const saved = (await chrome.storage.session.get(key))[key];
+  // A new page in the tab, or an old lookup: look it up again
+  return saved && saved.tabUrl === state.tabUrl && Date.now() - saved.at < PAGE_MEMORY_MS ? saved : null;
+}
+
+function rememberPage() {
+  if (!state.remember || !state.source || state.tabId == null) return;
+  const saved = {
+    tabUrl: state.tabUrl,
+    lastUrl: state.lastUrl,
+    at: state.sourceAt,
+    source: state.source,
+    parent: state.parent,
+    selectedFormats: [...state.selectedFormats],
+    selectedEntries: [...state.selectedEntries],
+    preset: state.preset,
+  };
+  chrome.storage.session.set({ [VG.pageKey(state.tabId)]: saved }).catch(() => {});
+}
+
+async function restorePage(saved) {
+  state.lastUrl = saved.lastUrl;
+  // The login isn't kept with it; a later lookup ("Load more") needs it again
+  const cookies = await VG.cookieTextFor([saved.lastUrl]);
+  state.sourceExtra = cookies ? { cookies } : {};
+  state.remember = true;
+  state.source = saved.source;
+  state.sourceAt = saved.at;
+  state.parent = saved.parent;
+  state.selectedFormats = new Set(saved.selectedFormats);
+  state.selectedEntries = new Set(saved.selectedEntries);
+  state.preset = saved.preset;
+  renderSource({ source: state.source });
+  updateGrab();
 }
 
 /** Draw the current source again, keeping the place in the panel. */
@@ -583,6 +668,8 @@ function pendingItems() {
 }
 
 function updateGrab() {
+  // Every change to what's chosen comes through here
+  rememberPage();
   const items = state.offline ? [] : pendingItems();
   const counter = $("selected-count");
   if (counter && state.source?.kind === "playlist") counter.textContent = `${state.selectedEntries.size} selected`;
@@ -735,7 +822,7 @@ function showTab(name) {
 
 function renderJobs() {
   const list = $("jobs");
-  const jobs = state.jobs.filter((j) => !state.removing.has(j.id)).sort(VG.byPriority).slice(0, 30);
+  const jobs = state.jobs.filter((j) => !state.removing.has(j.id)).sort(VG.byPriority);
   const active = jobs.filter(VG.isActive).length;
   $("jobs-count").hidden = !jobs.length;
   // Running ones when there are any, otherwise everything listed

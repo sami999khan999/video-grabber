@@ -243,7 +243,7 @@ const recordMedia = serialMedia(async (details, { manifest, type, size }) => {
   await chrome.storage.session.set({ [key]: [entry, ...rest].slice(0, MAX_PER_TAB) });
 });
 
-const forgetTab = serialMedia((tabId) => chrome.storage.session.remove(VG.mediaKey(tabId)));
+const forgetTab = serialMedia((tabId) => chrome.storage.session.remove([VG.mediaKey(tabId), VG.pageKey(tabId)]));
 chrome.tabs.onRemoved.addListener((tabId) => forgetTab(tabId));
 chrome.tabs.onUpdated.addListener((tabId, change) => {
   // A new page in the tab: what the old one played no longer applies

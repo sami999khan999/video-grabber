@@ -76,6 +76,8 @@ var VG = (() => {
 
   // Videos the background script saw a tab load, newest first
   const mediaKey = (tabId) => `media:${tabId}`;
+  // What the popup looked this tab's page up as (see popup.js)
+  const pageKey = (tabId) => `page:${tabId}`;
   const detectedMedia = async (tabId) => (await chrome.storage.session.get(mediaKey(tabId)))[mediaKey(tabId)] || [];
 
   /**
@@ -209,7 +211,7 @@ var VG = (() => {
 
   return {
     YOUTUBE, hasYouTube, requestYouTube, YOUTUBE_LOGIN_COOKIES, syncYouTubeLogin, timeAgo,
-    ALL_SITES, hasAllSites, requestAllSites, mediaKey, detectedMedia, cookieTextFor,
+    ALL_SITES, hasAllSites, requestAllSites, mediaKey, pageKey, detectedMedia, cookieTextFor,
     runCommand,
     DEFAULTS, getSettings, normalizeServer, hasAccess, requestAccess, api,
     isActive, canPause, byPriority, isYouTube, freshYouTubeLogin, formatBytes, formatDuration, PRESETS,

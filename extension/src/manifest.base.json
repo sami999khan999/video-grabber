@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Video Grabber",
   "short_name": "Video Grabber",
-  "version": "1.10.4",
+  "version": "1.10.5",
   "description": "Send videos and playlists to your Video Grabber server: pick any quality or audio only, and watch the downloads live.",
   "homepage_url": "https://github.com/sami999khan999/video-grabber",
   "icons": {
