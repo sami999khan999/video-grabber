@@ -33,6 +33,10 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
     JOB_TTL_HOURS=6 \
     PORT=7845
 
+# glibc gives every thread its own malloc arena (up to 8 per CPU), each keeping what it freed;
+# a couple of shared ones keep the many download threads from bloating the process
+ENV MALLOC_ARENA_MAX=2
+
 RUN apt-get update \
     && apt-get install -y --no-install-recommends ffmpeg \
     && rm -rf /var/lib/apt/lists/*

@@ -9,6 +9,7 @@ import uuid
 from yt_dlp.utils import DownloadCancelled
 
 from common.utils.log import log
+from common.utils.memory import release_memory
 
 from .limits import SpeedLimiter, speed_limit
 from .politeness import gate, polite_options, retry_pause
@@ -274,6 +275,11 @@ class JobManager:
             with self._cond:
                 self._running -= 1
             self._dispatch()
+            # The last download stopped (finished, paused, cancelled or removed): give its memory back
+            with self._cond:
+                idle = self._running == 0 and not self._waiting
+            if idle:
+                release_memory()
 
     def _unqueue(self, job):
         """Take a job out of the line before it starts; False when it already runs."""
@@ -624,6 +630,11 @@ class JobManager:
                 ]
             for job_id in expired:
                 self.remove(job_id)
+            # Lookups (/api/info/) run on the web threads and leave their arenas full too
+            with self._cond:
+                idle = self._running == 0
+            if idle:
+                release_memory()
 
 
 def _remove_dirs(paths):
