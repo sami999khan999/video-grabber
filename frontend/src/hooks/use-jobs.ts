@@ -10,6 +10,8 @@ import { Job, saveJobFile, videoApi } from "@/lib/api";
  */
 export function useJobs(autoSave: boolean) {
   const [jobs, setJobs] = useState<Job[]>([]);
+  // Bytes per second all downloads together pull, as the server measures it
+  const [speed, setSpeed] = useState(0);
   const [connected, setConnected] = useState(false);
   const pending = useRef(new Set<string>());
   const autoSaveRef = useRef(autoSave);
@@ -37,7 +39,9 @@ export function useJobs(autoSave: boolean) {
     source.onerror = () => setConnected(false);
     source.onmessage = (event) => {
       setConnected(true);
-      handle(JSON.parse(event.data).jobs);
+      const data = JSON.parse(event.data);
+      handle(data.jobs);
+      setSpeed(data.speed ?? 0);
     };
     return () => source.close();
   }, [handle]);
@@ -46,5 +50,5 @@ export function useJobs(autoSave: boolean) {
     ids.forEach((id) => pending.current.add(id));
   }, []);
 
-  return { jobs, connected, track };
+  return { jobs, speed, connected, track };
 }

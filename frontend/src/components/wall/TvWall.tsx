@@ -58,11 +58,13 @@ interface TvWallProps {
   tuning: boolean;
   live: boolean;
   status?: StationStatus;
+  /** Bytes per second all downloads together pull */
+  speed: number;
   onPickJob: (job: Job) => void;
   onOpen: (view: "queue" | "saved" | "auth") => void;
 }
 
-export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, onOpen }: TvWallProps) {
+export function TvWall({ jobs, image, title, tuning, live, status, speed, onPickJob, onOpen }: TvWallProps) {
   // Live downloads get the most visible sets
   const ordered = [...jobs].sort(byPriority);
   const shown = ordered.slice(0, JOB_ORDER.length);
@@ -89,7 +91,7 @@ export function TvWall({ jobs, image, title, tuning, live, status, onPickJob, on
             {slot.kind === "speaker" ? (
               <Speaker cones={slot.cones} />
             ) : slot.gauge ? (
-              <GaugeTv slot={slot} gauge={slot.gauge} jobs={jobs} status={status} onOpen={onOpen} />
+              <GaugeTv slot={slot} gauge={slot.gauge} jobs={jobs} status={status} speed={speed} onOpen={onOpen} />
             ) : slot.id === "main" ? (
               <MainTv image={image} title={title} tuning={tuning} />
             ) : (
@@ -181,11 +183,10 @@ interface Reading {
 }
 
 /** What a gauge set shows right now; null when there is nothing to report (it shows its filler) */
-function readGauge(gauge: Gauge, jobs: Job[], status?: StationStatus): Reading | null {
+function readGauge(gauge: Gauge, jobs: Job[], speed: number, status?: StationStatus): Reading | null {
   const downloading = jobs.filter((j) => j.status === "downloading");
   switch (gauge) {
     case "speed": {
-      const speed = downloading.reduce((sum, j) => sum + (j.speed ?? 0), 0);
       return speed > 0 ? { value: `${formatBytes(speed)}/s`, caption: "incoming", bg: "#ff3d3d", led: { color: "#ff3d3d", blink: true } } : null;
     }
     case "eta": {
@@ -215,15 +216,17 @@ function GaugeTv({
   gauge,
   jobs,
   status,
+  speed,
   onOpen,
 }: {
   slot: Slot;
   gauge: Gauge;
   jobs: Job[];
   status?: StationStatus;
+  speed: number;
   onOpen: (view: "queue" | "saved" | "auth") => void;
 }) {
-  const reading = readGauge(gauge, jobs, status);
+  const reading = readGauge(gauge, jobs, speed, status);
   if (!reading) {
     return (
       <TvBody body={slot.body}>

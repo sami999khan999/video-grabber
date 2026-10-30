@@ -142,8 +142,9 @@ class JobListView(APIView):
     """
 
     def get(self, request):
-        _, jobs = get_manager().snapshot()
-        return Response({"jobs": jobs})
+        manager = get_manager()
+        _, jobs = manager.snapshot()
+        return Response({"jobs": jobs, "speed": manager.speed()})
 
     def post(self, request):
         items = request.data.get("items")
@@ -276,7 +277,7 @@ def job_stream(request):
                 yield ": ping\n\n"
                 continue
             version = new_version
-            yield f"data: {json.dumps({'jobs': jobs})}\n\n"
+            yield f"data: {json.dumps({'jobs': jobs, 'speed': manager.speed()})}\n\n"
             time.sleep(0.25)
 
     response = StreamingHttpResponse(events(), content_type="text/event-stream")

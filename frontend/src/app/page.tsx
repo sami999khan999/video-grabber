@@ -64,7 +64,7 @@ export default function Home() {
   const [actionError, setActionError] = useState<string | null>(null);
   const [autoSave, changeAutoSave] = useAutoSave();
 
-  const { jobs: serverJobs, connected, track } = useJobs(autoSave);
+  const { jobs: serverJobs, speed: serverSpeed, connected, track } = useJobs(autoSave);
   // Jobs being removed disappear right away, without waiting for the server to confirm
   const [removing, setRemoving] = useState<Set<string>>(new Set());
   // Newest first
@@ -188,7 +188,8 @@ export default function Home() {
       })
       .catch((err: Error) => setActionError(err.message));
 
-  const speed = jobs.reduce((sum, j) => sum + (j.status === "downloading" && j.speed ? j.speed : 0), 0);
+  // The last update can come while nothing downloads any more
+  const speed = jobs.some((j) => j.status === "downloading") ? serverSpeed : 0;
   const saved = jobs.filter((j) => j.status === "done").length;
   const failed = jobs.filter((j) => j.status === "error").length;
   const tuneError = tune.error?.message;
@@ -235,6 +236,7 @@ export default function Home() {
               tuning={tune.isPending}
               live={live}
               status={status}
+              speed={speed}
               onPickJob={(job) => setView(job.status === "done" ? "saved" : "queue")}
               onOpen={setView}
             />

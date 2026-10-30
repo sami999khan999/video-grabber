@@ -52,7 +52,7 @@ services:
     ports:
       - "7845:7845"
     environment:
-      MAX_PARALLEL_DOWNLOADS: 0   # 0 = all at once
+      MAX_PARALLEL_DOWNLOADS: 4   # 0 = all at once
     volumes:
       - data:/data   # uploaded YouTube cookies survive restarts
     restart: unless-stopped
@@ -75,7 +75,7 @@ docker compose up -d
 | 🎧 **Audio only** | Original AAC (M4A) or Opus, or converted to MP3 at 192 kbps |
 | 📼 **Playlists** | Lists every video with thumbnails; tick the ones you want, pick one quality cap for all of them and queue them in one go |
 | 📡 **Live progress** | Server-Sent Events push percent, size, speed, ETA, which stream (video, then audio) and the merge / convert step |
-| 🔀 **Parallel downloads** | Every download starts at once (or cap them with `MAX_PARALLEL_DOWNLOADS`). ⚡ Prioritize one and the others slow down so it finishes first. Pause and resume, cancel, retry or remove any of them |
+| 🔀 **Parallel downloads** | Four downloads run at a time and the rest wait their turn (`MAX_PARALLEL_DOWNLOADS`). ⚡ Prioritize one and the others slow down so it finishes first. Pause and resume, cancel, retry or remove any of them |
 | 🐢 **Speed limit** | Cap how fast all downloads together may go (from the speed pill in the top bar or the extension), so the rest of the network stays usable; running downloads follow a change straight away |
 | 💾 **Straight to disk** | Finished files go to the browser's own download manager (auto-save is optional); nothing is held in browser memory |
 | 🌐 **Almost any site** | ~1,800 sites by name through yt-dlp; with the extension, also the video a page is playing on any other site (MP4, HLS, DASH), fetched with that page's headers and, if you allow it, your login for that site |
@@ -189,7 +189,7 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 
 | Variable | Default | What it does |
 |---|---|---|
-| `MAX_PARALLEL_DOWNLOADS` | `0` | Downloads that run at the same time; `0` starts them all at once, a number makes the rest wait (priority first) |
+| `MAX_PARALLEL_DOWNLOADS` | `4` | Downloads that run at the same time, the rest wait (priority first); `0` starts them all at once, which takes a lot of memory for a big playlist |
 | `SPEED_LIMIT_KBPS` | `0` | Starting total speed limit for all downloads in KB/s (`0` = none); once it's changed from the page or the extension, that setting (saved in `DATA_DIR`) wins |
 | `BACKGROUND_KBPS` | `256` | While one download has priority (⚡ button), every other one is held to this speed in KB/s; `0` leaves them alone |
 | `POLITE_MODE` | `1` | Pace traffic per site (below); `0` turns it off |
@@ -199,6 +199,7 @@ Pass with `-e NAME=value` (or `environment:` in Compose).
 | `REQUEST_SLEEP` | `1` | Seconds yt-dlp waits between its own requests |
 | `FRAGMENT_PARALLEL` | `8` | Pieces of an HLS/DASH video fetched at once; higher is faster, `1` is one at a time |
 | `HTTP_CHUNK_MB` | `10` | Plain files are fetched in chunks of this size, which gets past per-request throttling; `0` turns it off |
+| `READ_KB` | `128` | Size of each read from a download; small reads keep a speed limit steady instead of bursting |
 | `INFO_CACHE_MINUTES` | `10` | How long a link lookup is reused instead of asked again |
 | `JOB_TTL_HOURS` | `6` | How long finished files stay on the server |
 | `ALLOWED_HOSTS` | `*` | Comma-separated host names the app answers to |

@@ -2,6 +2,7 @@ import json
 import os
 import threading
 import time
+from collections import deque
 
 from .ytdlp import DATA_DIR
 
@@ -11,6 +12,8 @@ SETTINGS_FILE = os.path.join(DATA_DIR, "settings.json")
 DEFAULT_SPEED_LIMIT = max(0, int(float(os.environ.get("SPEED_LIMIT_KBPS", "0"))))
 # A limited download may run this far ahead before it has to wait, so it doesn't stutter
 BURST_SECONDS = 0.5
+# Seconds the total speed shown on the page is averaged over
+METER_WINDOW = 3
 
 _lock = threading.Lock()
 _state = {"speed_limit_kbps": None}
@@ -62,3 +65,34 @@ class SpeedLimiter:
             now = time.monotonic()
             self._due = max(self._due, now - BURST_SECONDS) + nbytes / (kbps * 1024)
             return max(0.0, self._due - now)
+
+
+class Throughput:
+    """
+    What all downloads together actually pull, in bytes per second. Adding up each download's own
+    speed is far off when many share a limit: each one gets a chunk now and then and waits between.
+    """
+
+    def __init__(self):
+        self._lock = threading.Lock()
+        self._samples = deque()
+
+    def add(self, nbytes):
+        now = time.monotonic()
+        with self._lock:
+            self._samples.append((now, nbytes))
+            self._prune(now)
+
+    def _prune(self, now):
+        while self._samples and now - self._samples[0][0] > METER_WINDOW:
+            self._samples.popleft()
+
+    def rate(self):
+        now = time.monotonic()
+        with self._lock:
+            self._prune(now)
+            if not self._samples:
+                return 0.0
+            total = sum(n for _, n in self._samples)
+            # Just started: average over the time there has been, not the whole window
+            return total / max(1.0, min(METER_WINDOW, now - self._samples[0][0]))

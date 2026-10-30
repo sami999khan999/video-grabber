@@ -11,13 +11,15 @@ from yt_dlp.utils import DownloadCancelled
 from common.utils.log import log
 from common.utils.memory import release_memory
 
-from .limits import SpeedLimiter, speed_limit
+from .limits import SpeedLimiter, Throughput, speed_limit
 from .politeness import gate, polite_options, retry_pause
 from .ytdlp import clean_headers, extract, mix_video_url
 
 # Jobs live in memory, so the app must run as a single process (threads are fine).
-# 0 starts every download straight away; a number makes the rest wait (priority ones first)
-MAX_PARALLEL_DOWNLOADS = max(0, int(os.environ.get("MAX_PARALLEL_DOWNLOADS", "0")))
+# The rest wait their turn (priority ones first); 0 starts every download straight away. Each running
+# download holds a whole extraction and its fragment threads in memory, so a 100-video playlist
+# all at once takes over a GB, and is no faster under a speed limit
+MAX_PARALLEL_DOWNLOADS = max(0, int(os.environ.get("MAX_PARALLEL_DOWNLOADS", "4")))
 # While one download has priority, every other one is held to this speed so it gets the bandwidth
 BACKGROUND_KBPS = float(os.environ.get("BACKGROUND_KBPS", "256"))
 # HLS/DASH videos come in many small pieces; fetching several at once is what makes them fast
@@ -25,6 +27,9 @@ FRAGMENT_PARALLEL = max(1, int(os.environ.get("FRAGMENT_PARALLEL", "8")))
 # Plain files are asked for in chunks of this size: servers that throttle one long request
 # (YouTube does) serve each fresh chunk at full speed
 HTTP_CHUNK_MB = float(os.environ.get("HTTP_CHUNK_MB", "10"))
+# Reads stay this small: yt-dlp would grow them to 4 MB, and the kernel's receive buffer with them,
+# so a limited download took in megabytes at full speed and then stood still for half a minute
+READ_KB = max(16, int(os.environ.get("READ_KB", "128")))
 # Seconds the speed shown for a limited download is averaged over
 RATE_WINDOW = 4
 JOB_TTL_SECONDS = float(os.environ.get("JOB_TTL_HOURS", "6")) * 3600
@@ -201,6 +206,7 @@ class JobManager:
         self._waiting = []
         self._running = 0
         self._limiter = SpeedLimiter()
+        self._meter = Throughput()
         # Files from a previous run have no job left pointing at them
         shutil.rmtree(DOWNLOAD_DIR, ignore_errors=True)
         os.makedirs(DOWNLOAD_DIR, exist_ok=True)
@@ -223,6 +229,10 @@ class JobManager:
     def snapshot(self):
         with self._cond:
             return self._version, [job.to_dict() for job in self._jobs.values()]
+
+    def speed(self):
+        """Bytes per second all downloads together pull right now."""
+        return self._meter.rate()
 
     def wait_for_change(self, since, timeout):
         """Block until the state is newer than `since` (or the timeout passes)."""
@@ -404,6 +414,8 @@ class JobManager:
             merge_output_format="mp4/mkv",
             format=format_selector(job.format_id),
             concurrent_fragment_downloads=FRAGMENT_PARALLEL,
+            buffersize=READ_KB * 1024,
+            noresizebuffer=True,
             progress_hooks=[lambda d: self._on_progress(job, d)],
             postprocessor_hooks=[lambda d: self._on_postprocess(job, d)],
             **polite_options(),
@@ -600,7 +612,9 @@ class JobManager:
         with self._cond:
             last, job.limit_bytes = job.limit_bytes, done
         # Each stream counts its bytes from zero again
-        wait = self._limiter.delay(done - last) if last is not None and done > last else 0.0
+        received = done - last if last is not None and done > last else 0
+        self._meter.add(received)
+        wait = self._limiter.delay(received)
         while wait > 0:
             if job.cancel_event.wait(min(wait, 1.0)):
                 raise DownloadCancelled("Cancelled")
