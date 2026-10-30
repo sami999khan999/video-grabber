@@ -269,10 +269,14 @@ class JobManager:
         return jobs
 
     def _dispatch(self):
-        """Start waiting jobs while there is room, priority ones first."""
+        """Start waiting jobs while there is room, priority ones first; a priority one gets a slot of its own."""
         with self._cond:
-            while self._waiting and (MAX_PARALLEL_DOWNLOADS == 0 or self._running < MAX_PARALLEL_DOWNLOADS):
-                job = next((j for j in self._waiting if j.priority), self._waiting[0])
+            while self._waiting:
+                job = next((j for j in self._waiting if j.priority), None)
+                if job is None:
+                    if MAX_PARALLEL_DOWNLOADS and self._running >= MAX_PARALLEL_DOWNLOADS:
+                        break
+                    job = self._waiting[0]
                 self._waiting.remove(job)
                 self._running += 1
                 threading.Thread(target=self._work, args=(job,), daemon=True,
@@ -519,8 +523,7 @@ class JobManager:
             raise DownloadCancelled("Cancelled")
 
         info = d.get("info_dict") or {}
-        # Video + audio downloads report each stream separately, one after the other
-        streams = len(info.get("requested_formats") or []) or 1
+        streams = _stream_count(info, d.get("filename"))
         fields = {}
         if not job.title and info.get("title"):
             fields["title"] = info["title"]
@@ -649,6 +652,19 @@ class JobManager:
                 idle = self._running == 0
             if idle:
                 release_memory()
+
+
+def _stream_count(info, filename):
+    """
+    How many streams this download fetches. Video + audio report each stream separately, one after
+    the other; yt-dlp no longer hands the hook the list of them, but names each part to be merged
+    <id>.f<format>.<ext>, so a part named like that is one of two.
+    """
+    if info.get("requested_formats"):
+        return len(info["requested_formats"])
+    name = os.path.basename(filename or "")
+    part = f"{info.get('id')}.f{info.get('format_id')}."
+    return 2 if info.get("id") and info.get("format_id") and name.startswith(part) else 1
 
 
 def _remove_dirs(paths):
