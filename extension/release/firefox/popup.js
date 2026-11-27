@@ -73,7 +73,6 @@ const state = {
   // When the source was looked up
   sourceAt: 0,
   // The playlist "Only the playing one" left, with its choices, to go back to without a lookup
-  parent: null,
 };
 
 // --- start-up ------------------------------------------------------------------
@@ -217,16 +216,13 @@ function openStation() {
 
 /**
  * Look a link up on the server. `media` is a stream this tab was seen playing: it carries the
- * page's headers, and its title (yt-dlp only sees a file name there). `parent` is the playlist
- * this video was picked from.
+ * page's headers, and its title (yt-dlp only sees a file name there).
  */
-async function tune(url, { media = null, pageTune = false, parent = null } = {}) {
+async function tune(url, { media = null, pageTune = false } = {}) {
   state.lastUrl = url;
   if (state.offline) return;
   state.source = null;
-  state.parent = null;
-  // A video picked from a remembered playlist is remembered in its place
-  state.remember = pageTune || (!!parent && state.remember);
+  state.remember = pageTune;
   updateGrab();
   renderSource({ loading: url });
   try {
@@ -241,7 +237,6 @@ async function tune(url, { media = null, pageTune = false, parent = null } = {})
     if (state.lastUrl !== url) return; // tuned to something else meanwhile
     state.source = source;
     state.sourceAt = Date.now();
-    state.parent = parent;
     if (source.kind === "video") {
       state.selectedFormats = new Set(source.formats.length ? [source.formats[0].format_id] : []);
     } else {
@@ -406,15 +401,6 @@ function sourceHead(source, kind, tone, meta) {
 
 function renderVideo(box, source) {
   box.append(sourceHead(source, "Single video", "yellow", [source.uploader, source.duration ? VG.formatDuration(source.duration) : ""]));
-  if (state.parent) {
-    box.append(
-      h(
-        "div",
-        { class: "list-tools" },
-        h("button", { class: "btn ghost", title: state.parent.source.title, onclick: backToPlaylist }, "Back to the whole list"),
-      ),
-    );
-  }
 
   const bank = (label, formats) => {
     if (!formats.length) return;
@@ -499,11 +485,13 @@ function renderPlaylist(box, source) {
             "button",
             {
               class: "btn ghost",
-              title: "Grab only the video that was playing, with the full choice of qualities",
-              onclick: () =>
-                tune(`https://www.youtube.com/watch?v=${source.current}`, {
-                  parent: { source, selectedEntries: [...state.selectedEntries], preset: state.preset, at: state.sourceAt, lastUrl: state.lastUrl },
-                }),
+              title: "Tick only the video that was playing",
+              // It is already in the list: no need to look it up again
+              onclick: () => {
+                state.selectedEntries = new Set([source.current]);
+                redrawSource();
+                document.querySelector(".entry .now")?.closest(".entry").scrollIntoView({ block: "center" });
+              },
             },
             "Only the playing one",
           )
@@ -556,19 +544,6 @@ function renderPlaylist(box, source) {
   );
 }
 
-/** Show the playlist "Only the playing one" came from again, as it was left. */
-function backToPlaylist() {
-  const { source, selectedEntries, preset, at, lastUrl } = state.parent;
-  state.parent = null;
-  state.source = source;
-  state.sourceAt = at;
-  state.lastUrl = lastUrl;
-  state.selectedEntries = new Set(selectedEntries);
-  state.preset = preset;
-  renderSource({ source });
-  updateGrab();
-}
-
 // --- memory -------------------------------------------------------------------
 // What this tab's page was looked up as, and the choices made there: opening the popup again
 // shows it at once instead of asking the server (and the site) for it again
@@ -590,7 +565,6 @@ function rememberPage() {
     lastUrl: state.lastUrl,
     at: state.sourceAt,
     source: state.source,
-    parent: state.parent,
     selectedFormats: [...state.selectedFormats],
     selectedEntries: [...state.selectedEntries],
     preset: state.preset,
@@ -606,7 +580,6 @@ async function restorePage(saved) {
   state.remember = true;
   state.source = saved.source;
   state.sourceAt = saved.at;
-  state.parent = saved.parent;
   state.selectedFormats = new Set(saved.selectedFormats);
   state.selectedEntries = new Set(saved.selectedEntries);
   state.preset = saved.preset;
