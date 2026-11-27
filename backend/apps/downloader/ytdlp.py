@@ -201,30 +201,41 @@ def extract(url: str, download: bool = False, headers=None, cookie_text=None, **
     signed-in user and cookies are available, retry with them.
 
     `headers` (Referer, ...) go with every request. `cookie_text` is a login the browser
-    extension sent for this one request: it is used straight away, written to a private
-    temporary file only for the duration of the call, and never stored.
+    extension sent for this one request: it takes the place of the stored cookies (and, like
+    them, comes after the anonymous try), is written to a private temporary file only for the
+    duration of the call, and never stored.
     """
     if headers:
         extra["http_headers"] = headers
+    request_cookies = None
     if cookie_text:
-        fd, path = tempfile.mkstemp(prefix="request-cookies-", suffix=".txt")
-        try:
-            with os.fdopen(fd, "w", encoding="utf-8") as f:
-                f.write(cookie_text)
-            with yt_dlp.YoutubeDL({**_options(False, extra), "cookiefile": path}) as ydl:
-                return ydl.extract_info(url, download=download)
-        finally:
+        fd, request_cookies = tempfile.mkstemp(prefix="request-cookies-", suffix=".txt")
+        with os.fdopen(fd, "w", encoding="utf-8") as f:
+            f.write(cookie_text)
+    try:
+        return _extract(url, download, extra, request_cookies)
+    finally:
+        if request_cookies:
             try:
-                os.remove(path)
+                os.remove(request_cookies)
             except FileNotFoundError:
                 pass
 
-    attempts = [False, True] if cookiefile() is not None else [False]
+
+def _extract(url: str, download: bool, extra: dict, request_cookies) -> dict:
+    # A login sent with the request is tried like the stored one: only after the anonymous
+    # try, because a signed-in YouTube account can be served nothing but storyboards
+    # ("Requested format is not available") for a video anyone can watch
+    login = request_cookies or cookiefile()
+    attempts = [False, True] if login is not None else [False]
 
     last_error = None
     for with_cookies in attempts:
+        options = _options(with_cookies, extra)
+        if with_cookies and request_cookies:
+            options["cookiefile"] = request_cookies
         try:
-            with yt_dlp.YoutubeDL(_options(with_cookies, extra)) as ydl:
+            with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=download)
             # YouTube's history, feeds and private playlists come back empty, not refused,
             # to a visitor who isn't signed in
@@ -234,7 +245,9 @@ def extract(url: str, download: bool = False, headers=None, cookie_text=None, **
         except DownloadCancelled:
             raise
         except Exception as exc:
-            if not SIGN_IN_NEEDED.search(str(exc)):
+            # Another site's login can matter in ways yt-dlp words differently (403, ...),
+            # so with one sent along any anonymous failure gets a second try with it
+            if with_cookies or not (request_cookies or SIGN_IN_NEEDED.search(str(exc))):
                 raise
             last_error = exc
     raise last_error
