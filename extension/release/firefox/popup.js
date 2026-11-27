@@ -686,6 +686,12 @@ async function grab() {
   try {
     const { jobs } = await VG.api("/jobs/", { method: "POST", body: { items } });
     await chrome.runtime.sendMessage({ type: "track", ids: jobs.map((j) => j.id) });
+    // Untick what was just queued, so a Grab after "Load more" takes only the new videos
+    if (state.source?.kind === "playlist") {
+      const queued = new Set(items.map((i) => i.url));
+      state.source.entries.forEach((e) => queued.has(e.url) && state.selectedEntries.delete(e.id));
+      redrawSource();
+    }
     $("grab-label").textContent = "Queued!";
     // Show them coming in
     setTimeout(() => {
